@@ -137,8 +137,12 @@ export async function upsertChannel(
   return toView(data as ChannelRow);
 }
 
-/** A publisher (re)registered or dropped a channel's SFU coordinates. */
+/** A publisher (re)registered or dropped a channel's SFU coordinates. Scoped to
+ * the authenticated session: the caller's secret was verified against
+ * `sessionId`, so the channel must belong to it — this prevents a secret-holder
+ * for session A from redirecting/knocking offline a channel owned by session B. */
 export async function setChannelPublish(
+  sessionId: string,
   channelId: string,
   input: { sfuSessionId: string; trackName: string; live: boolean },
 ): Promise<void> {
@@ -151,7 +155,8 @@ export async function setChannelPublish(
       is_live: input.live,
       updated_at: new Date().toISOString(),
     })
-    .eq("id", channelId);
+    .eq("id", channelId)
+    .eq("session_id", sessionId);
 }
 
 export async function endSession(id: string): Promise<void> {

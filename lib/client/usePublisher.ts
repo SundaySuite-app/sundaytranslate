@@ -81,7 +81,7 @@ export function usePublisher(sessionId: string | null, secret: string | null) {
 
         // 3. Publish to the SFU.
         const trackName = `${spec.kind}-${spec.targetLocale ?? "orig"}`;
-        const handle = await publishTrack(mic, trackName);
+        const handle = await publishTrack(mic, trackName, sessionId);
         handleRef.current = handle;
         handle.onState((s) => {
           if (s === "connected") setState("live");

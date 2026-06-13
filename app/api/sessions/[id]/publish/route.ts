@@ -32,7 +32,7 @@ export async function POST(
   }
   const live = body.live !== false;
 
-  await setChannelPublish(body.channelId, {
+  await setChannelPublish(id, body.channelId, {
     sfuSessionId: body.sfuSessionId,
     trackName: body.trackName,
     live,
