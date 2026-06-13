@@ -103,7 +103,7 @@ export default function Operator() {
             <Qr value={listenUrl} size={240} />
           </div>
           <p className="muted" style={{ marginBottom: 0 }}>
-            translator.sundaysuite.app → tast inn <strong>{pin}</strong>
+            translate.sundaysuite.app → tast inn <strong>{pin}</strong>
           </p>
         </section>
 

@@ -1,7 +1,7 @@
 # CLAUDE.md — SundayTranslate
 
 Live audio **translation + assistive listening** for the church, at
-`translator.sundaysuite.app`. You walk into a service in a language you don't
+`translate.sundaysuite.app`. You walk into a service in a language you don't
 speak; an interpreter in the back room reads the translation; you hear it in
 your earbuds on your own phone. The same pipe carries the **original room audio**
 as an assistive-listening channel for the hard-of-hearing (a hearing-loop
@@ -98,7 +98,7 @@ npx wrangler secret put CF_REALTIME_APP_ID
 npx wrangler secret put CF_REALTIME_APP_TOKEN
 ```
 
-`production-branch`/custom domain `translator.sundaysuite.app` is in
+`production-branch`/custom domain `translate.sundaysuite.app` is in
 `wrangler.jsonc`. Verify against the live domain like the other suite apps.
 
 ## Phase 2 / 3 — how they work (implemented)

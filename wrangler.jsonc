@@ -8,7 +8,7 @@
     "directory": ".open-next/assets",
     "binding": "ASSETS"
   },
-  "routes": [{ "pattern": "translator.sundaysuite.app", "custom_domain": true }],
+  "routes": [{ "pattern": "translate.sundaysuite.app", "custom_domain": true }],
   "observability": {
     "enabled": true
   },

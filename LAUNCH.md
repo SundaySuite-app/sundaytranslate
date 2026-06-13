@@ -26,7 +26,7 @@ rig-test). The code for all three phases is complete and `npm run check` is gree
    - `CF_REALTIME_APP_ID`, `CF_REALTIME_APP_TOKEN` (Cloudflare Realtime app)
    - `ANTHROPIC_API_KEY` (Phase 2 captions — optional; no key → captions degrade,
      human interpretation unaffected)
-4. **Deploy** (Cloudflare Worker, custom domain `translator.sundaysuite.app`):
+4. **Deploy** (Cloudflare Worker, custom domain `translate.sundaysuite.app`):
    ```
    set -a && source .env.production.local && set +a
    npm run cf:build && npx opennextjs-cloudflare deploy
