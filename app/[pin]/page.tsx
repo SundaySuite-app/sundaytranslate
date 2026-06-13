@@ -5,6 +5,8 @@ import { useParams } from "next/navigation";
 import { useStaffSession } from "@/lib/client/useStaffSession";
 import { useLiveChannels } from "@/lib/client/useLiveChannels";
 import { useSubscriber } from "@/lib/client/useSubscriber";
+import { useCaptions } from "@/lib/client/useCaptions";
+import { useTtsVoice } from "@/lib/client/useTtsVoice";
 import { useWakeLock } from "@/lib/client/hooks";
 import { LANGS, UI_LOCALES, isRtl, langName } from "@/lib/locales";
 import { strings } from "@/lib/locale";
@@ -17,7 +19,9 @@ export default function Listener() {
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const sub = useSubscriber(audioRef);
-  useWakeLock(sub.state === "playing" || sub.state === "connecting");
+  const [aiVoice, setAiVoice] = useState(false);
+  // Keep the screen awake while audio (human or AI) is playing.
+  useWakeLock(sub.state === "playing" || sub.state === "connecting" || aiVoice);
 
   // Listener UI language — guess from the browser, let them change it.
   const [ui, setUi] = useState("en");
@@ -33,6 +37,14 @@ export default function Listener() {
   }
   const t = strings(ui);
   const rtl = isRtl(ui);
+
+  // Phase 2: live subtitles, language-independent of the audio channel.
+  const [capLang, setCapLang] = useState("");
+  const capLocale = capLang || ui;
+  const cap = useCaptions(id, capLocale);
+
+  // Phase 3: optional AI voice — speak each caption line on this device.
+  useTtsVoice(cap.text, capLocale, aiVoice);
 
   const sorted = useMemo(
     () => [...channels].sort((a, b) => (a.kind === "original" ? -1 : b.kind === "original" ? 1 : 0)),
@@ -85,6 +97,45 @@ export default function Listener() {
             ))}
           </select>
         </header>
+
+        {cap.active && (
+          <section className="card" style={{ padding: "14px 16px" }} dir={isRtl(capLocale) ? "rtl" : "ltr"}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
+              <span className="muted" style={{ fontSize: 13 }}>💬 {langName(capLocale)}</span>
+              <select
+                className="select"
+                aria-label={t.uiLanguage}
+                value={LANGS.some((l) => l.code === capLocale) ? capLocale : "en"}
+                onChange={(e) => setCapLang(e.target.value)}
+                style={{ width: "auto", minHeight: 36, padding: "6px 10px" }}
+              >
+                {LANGS.map((l) => (
+                  <option key={l.code} value={l.code}>
+                    {l.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <label
+              style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 10, cursor: "pointer" }}
+            >
+              <input
+                type="checkbox"
+                checked={aiVoice}
+                onChange={(e) => setAiVoice(e.target.checked)}
+                style={{ width: 18, height: 18 }}
+              />
+              <span style={{ fontSize: 14 }}>
+                🔊 AI <span className="muted">· beta</span>
+              </span>
+            </label>
+            {cap.text && (
+              <p className="captions" style={{ marginTop: 12, marginBottom: 0 }}>
+                {cap.text}
+              </p>
+            )}
+          </section>
+        )}
 
         <div>
           <h1 style={{ fontSize: 26 }}>{t.choose}</h1>

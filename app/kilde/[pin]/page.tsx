@@ -6,6 +6,8 @@ import { VuMeter } from "@/components/VuMeter";
 import { useHashSecret, useVuMeter, useAudioInputs } from "@/lib/client/hooks";
 import { useStaffSession } from "@/lib/client/useStaffSession";
 import { usePublisher } from "@/lib/client/usePublisher";
+import { useLiveChannels } from "@/lib/client/useLiveChannels";
+import { useCaptioner } from "@/lib/client/useCaptioner";
 
 export default function Source() {
   const pin = String(useParams().pin);
@@ -17,6 +19,22 @@ export default function Source() {
   const [granted, setGranted] = useState(false);
   const [device, setDevice] = useState("");
   const devices = useAudioInputs(granted);
+
+  // Phase 2 captions: feed the published stream to ASR for every language the
+  // operator added (interpreter optional).
+  const { channels } = useLiveChannels(id);
+  const [captions, setCaptions] = useState(false);
+  const targets = channels
+    .filter((c) => c.kind !== "original" && c.targetLocale)
+    .map((c) => c.targetLocale as string);
+  useCaptioner({
+    sessionId: id,
+    secret,
+    stream: pub.stream,
+    source: session?.sourceLocale ?? "no",
+    targets,
+    enabled: captions && pub.state === "live",
+  });
 
   async function grant() {
     try {
@@ -103,6 +121,26 @@ export default function Source() {
                   "Velg lydkortet fra mikseren og trykk start."
                 )}
               </p>
+              {live && (
+                <label
+                  style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer" }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={captions}
+                    onChange={(e) => setCaptions(e.target.checked)}
+                    style={{ width: 20, height: 20 }}
+                  />
+                  <span>
+                    AI-undertekster{" "}
+                    <span className="muted" style={{ fontSize: 13 }}>
+                      {targets.length
+                        ? `(${targets.length} språk + original)`
+                        : "(legg til språk hos operatøren)"}
+                    </span>
+                  </span>
+                </label>
+              )}
               {pub.state === "error" && (
                 <p style={{ color: "var(--danger)", margin: 0 }}>
                   Tilkobling feilet. Sjekk lydkilde og nett, og prøv igjen.

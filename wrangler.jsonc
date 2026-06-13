@@ -11,7 +11,10 @@
   "routes": [{ "pattern": "translator.sundaysuite.app", "custom_domain": true }],
   "observability": {
     "enabled": true
-  }
+  },
+  // Workers AI — phase 2 (Whisper STT) + phase 3 (TTS). Free of per-request
+  // setup; the route guards on the binding being present.
+  "ai": { "binding": "AI" }
   // Runtime secrets (NEXT_PUBLIC_* are build-time inlined):
   //   npx wrangler secret put SUPABASE_SERVICE_ROLE_KEY
   //   npx wrangler secret put CF_REALTIME_APP_ID

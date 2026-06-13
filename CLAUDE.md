@@ -9,10 +9,16 @@ replacement). Fully web-based, zero install, anonymous for listeners.
 
 ## Status
 
-**Phase 1 (human interpreter + assistive listening) — built, type-checks,
-builds, lints clean. NOT yet rig-tested** (needs real Cloudflare Realtime creds
-+ phones). Phases 2 (AI captions) and 3 (AI synthetic voice) are scaffolded in
-the plan but not implemented.
+**All three phases implemented; type-checks, builds, lints clean. NOT yet
+rig-tested** (needs real Cloudflare Realtime + Workers AI + keys + phones).
+
+- **Phase 1** human interpreter + assistive listening — full, the reliable core.
+- **Phase 2** AI captions — source feeds 5s chunks → Whisper STT → Claude
+  translate → broadcast → listener subtitles (any language, incl. source for
+  HoH read-along). Degrades off cleanly with no AI binding / no key.
+- **Phase 3** AI synthetic voice — listener-side TTS of caption lines (no
+  server WebRTC: the phone speaks). Experimental; MeloTTS language coverage is
+  limited (en/es/fr/zh/ja/ko) — others get captions only.
 
 Gate: `npm run check` (tsc + eslint + vitest). Plan:
 `~/.claude/plans/kind-forging-origami.md`.
@@ -95,16 +101,25 @@ npx wrangler secret put CF_REALTIME_APP_TOKEN
 `production-branch`/custom domain `translator.sundaysuite.app` is in
 `wrangler.jsonc`. Verify against the live domain like the other suite apps.
 
-## Phase 2 / 3 (next)
+## Phase 2 / 3 — how they work (implemented)
 
-- **AI captions**: source streams the Original audio to `/api/asr` → Workers AI
-  (Deepgram Nova-3 streaming STT, or Whisper large-v3-turbo) → translate (reuse
-  the cached Claude translator from SundayStage, `app/api/sessions/[id]/translate`)
-  → push caption lines over the same Supabase broadcast (`events.caption`, already
-  defined) → listener renders subtitles. Bind Workers AI in `wrangler.jsonc`.
-- **AI synthetic voice**: caption text → Workers AI TTS (Deepgram Aura-1 /
-  MeloTTS) → publish as an `ai`-kind channel on the SFU. Listener selects it like
-  any other channel (`kind:"ai"` already modeled end-to-end).
+- **AI captions**: `useCaptioner` records the source's published stream in ~5s
+  self-contained webm/opus blobs → `POST /api/sessions/[id]/asr` → `lib/server/asr.ts`
+  (Workers AI Whisper) → `lib/server/translate.ts` (Claude Haiku, one call per
+  target) → `upsertCaption` + broadcast `events.caption` → listener `useCaptions`
+  renders subtitles + late-join snapshot via `GET /captions`. Toggle on the kilde
+  page; subtitle language picker on the listener (independent of the audio channel).
+  **Unverified**: Whisper accepting webm/opus chunks (may need Deepgram Nova-3
+  streaming or transcode); caption latency (~5s window + STT + MT).
+- **AI synthetic voice**: `useTtsVoice` sends each new caption line to
+  `POST /api/tts` → `lib/server/tts.ts` (Workers AI MeloTTS) → the listener
+  queues + plays the audio. No server-side WebRTC. **Unverified + experimental**:
+  per-line latency/choppiness; MeloTTS only covers a few languages; iOS autoplay
+  of queued TTS (primed by the toggle gesture + AudioContext resume).
+
+Both need the Workers AI binding (`ai` in `wrangler.jsonc`) and, for translation,
+`ANTHROPIC_API_KEY` as a Worker secret. With neither, the app is exactly Phase 1.
+Captions table: `supabase/migrations/20260613150000_translator_captions.sql`.
 
 ## Conventions
 

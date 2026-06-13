@@ -158,3 +158,38 @@ export async function endSession(id: string): Promise<void> {
   const sb = createServiceClient();
   await sb.from("sessions").update({ status: "ended" }).eq("id", id);
 }
+
+// ── captions (phase 2) ──────────────────────────────────────────────────────
+
+export interface CaptionView {
+  locale: string;
+  seq: number;
+  text: string;
+}
+
+/** Store the latest caption line for a (session, locale) — the late-join snapshot. */
+export async function upsertCaption(
+  sessionId: string,
+  locale: string,
+  seq: number,
+  text: string,
+): Promise<void> {
+  const sb = createServiceClient();
+  await sb.from("captions").upsert(
+    { session_id: sessionId, locale, seq, text, updated_at: new Date().toISOString() },
+    { onConflict: "session_id,locale" },
+  );
+}
+
+export async function getCaptions(sessionId: string): Promise<CaptionView[]> {
+  const sb = createServiceClient();
+  const { data } = await sb
+    .from("captions")
+    .select("locale, seq, text")
+    .eq("session_id", sessionId);
+  return ((data as CaptionView[] | null) ?? []).map((c) => ({
+    locale: c.locale,
+    seq: Number(c.seq),
+    text: c.text,
+  }));
+}
