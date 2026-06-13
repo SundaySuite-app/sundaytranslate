@@ -1,0 +1,295 @@
+/* SundayTranslate — design foundation.
+   Sunday Suite brand thread (gold #D4A73A · ink ground · Playfair Display +
+   Hanken Grotesk) with this app's own jewel tone: a communication TEAL/AZURE
+   — voice carried across a room. Fonts injected by next/font in layout.tsx. */
+
+:root {
+  /* suite thread */
+  --gold: #d4a73a;
+  --gold-light: #eccb7a;
+  --gold-deep: #b88a26;
+
+  /* ground */
+  --ink: #0e1418;
+  --ink-2: #141c22;
+  --ink-3: #1b252c;
+  --ink-soft: #243038;
+  --ink-line: rgba(255, 255, 255, 0.08);
+  --ink-line-strong: rgba(255, 255, 255, 0.16);
+
+  --paper: #f6f9fa;
+  --txt: #eaf1f3;
+  --txt-dim: #93a3ab;
+  --txt-faint: #66767e;
+
+  /* app jewel tone — teal/azure */
+  --accent: #2bb3c0;
+  --accent-light: #5fd6e0;
+  --accent-deep: #1b8d99;
+  --accent-grad: linear-gradient(135deg, #5fd6e0 0%, #2bb3c0 48%, #1b8d99 100%);
+
+  --ok: #4fb477;
+  --warn: #e0a64a;
+  --danger: #d2554d;
+  --live: #e0524a;
+
+  --display: var(--font-display), "Playfair Display", Georgia, serif;
+  --body: var(--font-body), "Hanken Grotesk", -apple-system, BlinkMacSystemFont,
+    "Segoe UI", sans-serif;
+  --mono: ui-monospace, "SF Mono", Menlo, monospace;
+
+  --maxw: 1100px;
+  --ease: cubic-bezier(0.22, 0.61, 0.36, 1);
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --radius: 16px;
+  --radius-sm: 11px;
+  --shadow-1: 0 2px 8px rgba(0, 0, 0, 0.3);
+  --shadow-2: 0 24px 60px -28px rgba(0, 0, 0, 0.7);
+  --shadow-accent: 0 10px 40px -12px rgba(43, 179, 192, 0.45);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  min-height: 100dvh;
+  background:
+    radial-gradient(1200px 700px at 50% -10%, rgba(43, 179, 192, 0.1), transparent 60%),
+    radial-gradient(900px 600px at 90% 110%, rgba(212, 167, 58, 0.06), transparent 55%),
+    var(--ink);
+  color: var(--txt);
+  font-family: var(--body);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+h1,
+h2,
+h3 {
+  font-family: var(--display);
+  font-weight: 800;
+  line-height: 1.05;
+  margin: 0;
+}
+
+a {
+  color: var(--accent-light);
+  text-decoration: none;
+}
+
+/* layout utilities */
+.wrap {
+  width: 100%;
+  max-width: var(--maxw);
+  margin: 0 auto;
+  padding: 0 20px;
+}
+
+.center-screen {
+  min-height: 100dvh;
+  display: grid;
+  place-items: center;
+  padding: 32px 20px;
+}
+
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.card {
+  background: linear-gradient(180deg, var(--ink-2), var(--ink-3));
+  border: 1px solid var(--ink-line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-2);
+  padding: 28px;
+}
+
+.kicker {
+  font-size: 13px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--accent-light);
+  font-weight: 700;
+}
+
+.muted {
+  color: var(--txt-dim);
+}
+
+/* buttons */
+.btn {
+  appearance: none;
+  border: 1px solid var(--ink-line-strong);
+  background: var(--ink-soft);
+  color: var(--txt);
+  font-family: var(--body);
+  font-weight: 700;
+  font-size: 16px;
+  padding: 14px 20px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition:
+    transform 0.12s var(--spring),
+    background 0.18s var(--ease),
+    border-color 0.18s var(--ease);
+  min-height: 52px;
+}
+
+.btn:hover {
+  transform: translateY(-1px);
+}
+
+.btn:active {
+  transform: translateY(0);
+}
+
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.btn-primary {
+  background: var(--accent-grad);
+  border-color: transparent;
+  color: #04231f;
+  box-shadow: var(--shadow-accent);
+}
+
+.btn-ghost {
+  background: transparent;
+}
+
+.btn-block {
+  width: 100%;
+}
+
+.btn-lg {
+  font-size: 18px;
+  padding: 18px 24px;
+  min-height: 64px;
+}
+
+/* form fields */
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--txt-dim);
+}
+
+.input,
+.select {
+  font-family: var(--body);
+  font-size: 16px;
+  color: var(--txt);
+  background: var(--ink);
+  border: 1px solid var(--ink-line-strong);
+  border-radius: var(--radius-sm);
+  padding: 14px 16px;
+  min-height: 52px;
+  width: 100%;
+}
+
+.input:focus,
+.select:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(43, 179, 192, 0.25);
+}
+
+/* PIN display (big, for the operator's screen) */
+.pin {
+  font-family: var(--mono);
+  font-weight: 700;
+  font-size: clamp(40px, 9vw, 96px);
+  letter-spacing: 0.12em;
+  color: var(--gold);
+}
+
+/* live dot */
+.live-dot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--live);
+  box-shadow: 0 0 0 0 rgba(224, 82, 74, 0.6);
+  animation: pulse 1.8s var(--ease) infinite;
+}
+
+@keyframes pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(224, 82, 74, 0.55);
+  }
+  70% {
+    box-shadow: 0 0 0 12px rgba(224, 82, 74, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(224, 82, 74, 0);
+  }
+}
+
+/* channel pills */
+.channel {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  text-align: left;
+  padding: 16px 18px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--ink-line-strong);
+  background: var(--ink-2);
+  color: var(--txt);
+  cursor: pointer;
+  font-size: 17px;
+  font-weight: 600;
+  transition:
+    border-color 0.18s var(--ease),
+    background 0.18s var(--ease);
+}
+
+.channel[data-selected="true"] {
+  border-color: var(--accent);
+  background: rgba(43, 179, 192, 0.12);
+}
+
+.channel .flag {
+  font-size: 24px;
+}
+
+/* captions overlay */
+.captions {
+  font-size: clamp(20px, 5vw, 30px);
+  line-height: 1.3;
+  font-weight: 600;
+  text-align: center;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}

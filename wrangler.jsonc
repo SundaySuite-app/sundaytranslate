@@ -1,0 +1,23 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "sundaytranslate",
+  "main": ".open-next/worker.js",
+  "compatibility_date": "2025-05-05",
+  "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
+  "assets": {
+    "directory": ".open-next/assets",
+    "binding": "ASSETS"
+  },
+  "routes": [{ "pattern": "translator.sundaysuite.app", "custom_domain": true }],
+  "observability": {
+    "enabled": true
+  }
+  // Runtime secrets (NEXT_PUBLIC_* are build-time inlined):
+  //   npx wrangler secret put SUPABASE_SERVICE_ROLE_KEY
+  //   npx wrangler secret put CF_REALTIME_APP_ID
+  //   npx wrangler secret put CF_REALTIME_APP_TOKEN
+  //   npx wrangler secret put ANTHROPIC_API_KEY   # phase 2 captions (optional)
+  //
+  // Phase 2/3 (AI captions + synthetic voice) also bind Workers AI:
+  //   "ai": { "binding": "AI" }
+}

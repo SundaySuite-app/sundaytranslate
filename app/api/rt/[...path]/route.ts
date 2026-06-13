@@ -1,0 +1,65 @@
+/**
+ * POST/PUT /api/rt/<path> — server-side proxy to the Cloudflare Realtime SFU.
+ *
+ * The SFU App Token is a SECRET and must never reach the browser. The browser
+ * runs the WebRTC peer connection (lib/sfu.ts) and calls these routes to relay
+ * the three SFU operations; we inject the bearer here.
+ *
+ * Allowlisted paths only (no open proxy):
+ *   POST sessions/new
+ *   POST sessions/<sfuSessionId>/tracks/new
+ *   PUT  sessions/<sfuSessionId>/renegotiate
+ *
+ * Base: https://rtc.live.cloudflare.com/v1/apps/<APP_ID>/<path>
+ * (Cloudflare Calls / Realtime SFU "tracks" API.)
+ */
+import { fail, rateLimit, clientIp } from "@/lib/server/http";
+
+const SFU_BASE = "https://rtc.live.cloudflare.com/v1/apps";
+
+const ALLOW: Record<string, RegExp> = {
+  POST: /^sessions\/new$|^sessions\/[A-Za-z0-9._-]+\/tracks\/new$/,
+  PUT: /^sessions\/[A-Za-z0-9._-]+\/renegotiate$/,
+};
+
+async function proxy(req: Request, path: string[]): Promise<Response> {
+  const appId = process.env.CF_REALTIME_APP_ID;
+  const appToken = process.env.CF_REALTIME_APP_TOKEN;
+  if (!appId || !appToken) return fail(503, "sfu_not_configured");
+
+  if (!rateLimit(`rt:${clientIp(req)}`, 240, 60_000)) return fail(429, "rate_limited");
+
+  const sub = path.join("/");
+  const allow = ALLOW[req.method];
+  if (!allow || !allow.test(sub)) return fail(404, "not_found");
+
+  const body = await req.text();
+  let upstream: Response;
+  try {
+    upstream = await fetch(`${SFU_BASE}/${appId}/${sub}`, {
+      method: req.method,
+      headers: {
+        Authorization: `Bearer ${appToken}`,
+        "Content-Type": "application/json",
+      },
+      body: body || undefined,
+    });
+  } catch {
+    return fail(502, "sfu_unreachable");
+  }
+
+  // Pass the SFU's JSON response straight through (SDP answers/offers etc.).
+  const text = await upstream.text();
+  return new Response(text, {
+    status: upstream.status,
+    headers: { "Content-Type": "application/json" },
+  });
+}
+
+export async function POST(req: Request, ctx: { params: Promise<{ path: string[] }> }) {
+  return proxy(req, (await ctx.params).path);
+}
+
+export async function PUT(req: Request, ctx: { params: Promise<{ path: string[] }> }) {
+  return proxy(req, (await ctx.params).path);
+}
