@@ -12,6 +12,8 @@ interface SessionRow {
   secret: string;
   created_at: string;
   expires_at: string;
+  local_relay_url: string | null;
+  local_relay_expires_at: string | null;
 }
 
 interface ChannelRow {
@@ -24,6 +26,8 @@ interface ChannelRow {
   sfu_session_id: string | null;
   track_name: string | null;
   is_live: boolean;
+  local_stream: string | null;
+  local_is_live: boolean;
   updated_at: string;
 }
 
@@ -37,6 +41,8 @@ function toView(r: ChannelRow): ChannelView {
     sfuSessionId: r.sfu_session_id,
     trackName: r.track_name,
     isLive: r.is_live,
+    localStream: r.local_stream ?? null,
+    localIsLive: r.local_is_live ?? false,
   };
 }
 
@@ -66,7 +72,20 @@ export async function sessionByPin(pin: string): Promise<SessionView | null> {
     | { id: string; title: string; source_locale: string; status: "live" | "ended" }
     | undefined;
   if (!row) return null;
-  return { id: row.id, title: row.title, sourceLocale: row.source_locale, status: row.status };
+  // The RPC's fixed return shape doesn't carry the relay url; enrich it so a
+  // listener resolving by PIN learns whether a local relay hosts this session.
+  const { data: relay } = await sb
+    .from("sessions")
+    .select("local_relay_url")
+    .eq("id", row.id)
+    .maybeSingle();
+  return {
+    id: row.id,
+    title: row.title,
+    sourceLocale: row.source_locale,
+    status: row.status,
+    localRelayUrl: (relay as { local_relay_url: string | null } | null)?.local_relay_url ?? null,
+  };
 }
 
 async function getRow(id: string): Promise<SessionRow | null> {
@@ -77,7 +96,29 @@ async function getRow(id: string): Promise<SessionRow | null> {
 
 export async function getSession(id: string): Promise<SessionView | null> {
   const r = await getRow(id);
-  return r ? { id: r.id, title: r.title, sourceLocale: r.source_locale, status: r.status } : null;
+  return r
+    ? {
+        id: r.id,
+        title: r.title,
+        sourceLocale: r.source_locale,
+        status: r.status,
+        localRelayUrl: r.local_relay_url ?? null,
+      }
+    : null;
+}
+
+/** Register (or clear) the local relay that hosts this session. Set by the
+ * relay/operator with the session secret; null clears it (back to cloud-only). */
+export async function setSessionRelay(
+  id: string,
+  relayUrl: string | null,
+  expiresAt: string | null,
+): Promise<void> {
+  const sb = createServiceClient();
+  await sb
+    .from("sessions")
+    .update({ local_relay_url: relayUrl, local_relay_expires_at: expiresAt })
+    .eq("id", id);
 }
 
 /** Verify a write secret against a live session. Returns the row or null. */
@@ -137,16 +178,24 @@ export async function upsertChannel(
   return toView(data as ChannelRow);
 }
 
-/** A publisher (re)registered or dropped a channel. Going live writes the SFU
- * coordinates; going offline only flips `is_live` and keeps the last
- * coordinates (no garbage placeholders). Scoped to the authenticated session:
- * the caller's secret was verified against `sessionId`, so the update is
- * constrained to a channel owned by it — a secret-holder for session A can't
- * redirect or knock offline a channel owned by session B. */
+/** A publisher (re)registered or dropped a channel. Going live writes the cloud
+ * SFU coordinates; going offline only flips `is_live` and keeps the last
+ * coordinates (no garbage placeholders). The local-relay coords (mediamtx
+ * stream) are written only when the publisher dual-published to a relay
+ * (`localStream` provided). Scoped to the authenticated session: the caller's
+ * secret was verified against `sessionId`, so the update is constrained to a
+ * channel owned by it — a secret-holder for session A can't redirect or knock
+ * offline a channel owned by session B. */
 export async function setChannelPublish(
   sessionId: string,
   channelId: string,
-  input: { sfuSessionId?: string | null; trackName?: string | null; live: boolean },
+  input: {
+    sfuSessionId?: string | null;
+    trackName?: string | null;
+    live: boolean;
+    localStream?: string | null;
+    localLive?: boolean;
+  },
 ): Promise<void> {
   const sb = createServiceClient();
   const patch: Record<string, unknown> = {
@@ -156,6 +205,10 @@ export async function setChannelPublish(
   if (input.live) {
     patch.sfu_session_id = input.sfuSessionId ?? null;
     patch.track_name = input.trackName ?? null;
+  }
+  if (input.localStream !== undefined) {
+    patch.local_stream = input.localStream;
+    patch.local_is_live = input.localLive ?? false;
   }
   await sb.from("channels").update(patch).eq("id", channelId).eq("session_id", sessionId);
 }

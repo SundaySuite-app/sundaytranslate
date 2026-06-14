@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { publishTrack, type PublishHandle } from "@/lib/sfu";
+import { publishTrack, publishTrackWhip, whipUrl, type PublishHandle, type MediaHandle } from "@/lib/sfu";
 import type { ChannelKind } from "@/lib/types";
 
 export type PublishState = "idle" | "connecting" | "live" | "error";
@@ -22,16 +22,23 @@ interface PublishOpts {
 /** Capture mic / sound-card audio and publish it as a session channel.
  * Ensures the channel row exists, pushes the track to the SFU, then registers
  * the SFU coordinates so listeners can subscribe. */
-export function usePublisher(sessionId: string | null, secret: string | null) {
+export function usePublisher(
+  sessionId: string | null,
+  secret: string | null,
+  localRelayUrl: string | null = null,
+) {
   const [state, setState] = useState<PublishState>("idle");
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [error, setError] = useState<string>("");
   const handleRef = useRef<PublishHandle | null>(null);
+  const localHandleRef = useRef<MediaHandle | null>(null);
   const channelIdRef = useRef<string | null>(null);
 
   const stop = useCallback(async () => {
     handleRef.current?.stop();
     handleRef.current = null;
+    localHandleRef.current?.stop();
+    localHandleRef.current = null;
     setStream(null);
     setState("idle");
     const cid = channelIdRef.current;
@@ -82,7 +89,7 @@ export function usePublisher(sessionId: string | null, secret: string | null) {
         const mic = await navigator.mediaDevices.getUserMedia({ audio, video: false });
         setStream(mic);
 
-        // 3. Publish to the SFU.
+        // 3. Publish to the cloud SFU (always — serves 4G listeners + captions).
         const trackName = `${spec.kind}-${spec.targetLocale ?? "orig"}`;
         const handle = await publishTrack(mic, trackName, sessionId);
         handleRef.current = handle;
@@ -91,7 +98,26 @@ export function usePublisher(sessionId: string | null, secret: string | null) {
           else if (s === "failed" || s === "disconnected" || s === "closed") setState("error");
         });
 
-        // 4. Register coordinates so listeners can pull it.
+        // 3b. Dual-publish to the local relay (best-effort) so on-wifi listeners
+        // can pull it locally. A relay failure never blocks the cloud path.
+        let localStream: string | undefined;
+        let localLive = false;
+        if (localRelayUrl) {
+          const path = `${sessionId}_${trackName}`.replace(/[^a-zA-Z0-9_-]/g, "_");
+          try {
+            localHandleRef.current = await publishTrackWhip(
+              mic,
+              whipUrl(localRelayUrl, path),
+              secret,
+            );
+            localStream = path;
+            localLive = true;
+          } catch {
+            /* relay publish failed — cloud still serves everyone */
+          }
+        }
+
+        // 4. Register coordinates so listeners can pull it (cloud + local).
         await fetch(`/api/sessions/${sessionId}/publish`, {
           method: "POST",
           headers: { "Content-Type": "application/json", Authorization: `Bearer ${secret}` },
@@ -100,6 +126,7 @@ export function usePublisher(sessionId: string | null, secret: string | null) {
             sfuSessionId: handle.sfuSessionId,
             trackName,
             live: true,
+            ...(localRelayUrl ? { localStream: localStream ?? null, localLive } : {}),
           }),
         });
         setState("live");
@@ -108,7 +135,7 @@ export function usePublisher(sessionId: string | null, secret: string | null) {
         setState("error");
       }
     },
-    [sessionId, secret],
+    [sessionId, secret, localRelayUrl],
   );
 
   return { state, stream, error, go, stop };

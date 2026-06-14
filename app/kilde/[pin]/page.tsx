@@ -13,7 +13,7 @@ export default function Source() {
   const pin = String(useParams().pin);
   const secret = useHashSecret();
   const { loading, id, session, error } = useStaffSession(pin);
-  const pub = usePublisher(id, secret);
+  const pub = usePublisher(id, secret, session?.localRelayUrl ?? null);
   const level = useVuMeter(pub.stream);
 
   const [granted, setGranted] = useState(false);
