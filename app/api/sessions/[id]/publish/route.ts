@@ -31,12 +31,12 @@ export async function POST(
     localStream?: string | null;
     localLive?: boolean;
   }>(req);
-  if (!body?.channelId || !body?.sfuSessionId || !body?.trackName) {
-    return fail(400, "missing_fields");
-  }
+  if (!body?.channelId) return fail(400, "missing_fields");
   const live = body.live !== false;
+  // Going live needs the coordinates; going offline just needs the channel.
+  if (live && (!body.sfuSessionId || !body.trackName)) return fail(400, "missing_fields");
 
-  await setChannelPublish(body.channelId, {
+  await setChannelPublish(id, body.channelId, {
     sfuSessionId: body.sfuSessionId,
     trackName: body.trackName,
     live,

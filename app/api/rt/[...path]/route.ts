@@ -14,6 +14,7 @@
  * (Cloudflare Calls / Realtime SFU "tracks" API.)
  */
 import { fail, rateLimit, clientIp } from "@/lib/server/http";
+import { getSession } from "@/lib/server/sessions";
 
 const SFU_BASE = "https://rtc.live.cloudflare.com/v1/apps";
 
@@ -28,6 +29,14 @@ async function proxy(req: Request, path: string[]): Promise<Response> {
   if (!appId || !appToken) return fail(503, "sfu_not_configured");
 
   if (!rateLimit(`rt:${clientIp(req)}`, 240, 60_000)) return fail(429, "rate_limited");
+
+  // Bind every proxied SFU op to a real live session (publisher or listener both
+  // carry the session id). Without this the proxy is an open relay that mints SFU
+  // sessions/tracks under our App Token — anyone could burn the Realtime budget.
+  const sessionId = req.headers.get("x-session-id");
+  if (!sessionId) return fail(401, "session_required");
+  const session = await getSession(sessionId);
+  if (!session || session.status !== "live") return fail(401, "session_required");
 
   const sub = path.join("/");
   const allow = ALLOW[req.method];

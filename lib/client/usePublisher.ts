@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { publishTrack, publishTrackWhip, whipUrl, type PublishHandle, type MediaHandle } from "@/lib/sfu";
 import type { ChannelKind } from "@/lib/types";
 
@@ -47,15 +47,18 @@ export function usePublisher(
       fetch(`/api/sessions/${sessionId}/publish`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${secret}` },
-        body: JSON.stringify({
-          channelId: cid,
-          sfuSessionId: "x",
-          trackName: "x",
-          live: false,
-        }),
+        body: JSON.stringify({ channelId: cid, live: false }),
       }).catch(() => {});
     }
   }, [sessionId, secret]);
+
+  // Release the mic + peer connection if the page unmounts mid-broadcast.
+  useEffect(() => {
+    return () => {
+      handleRef.current?.stop();
+      handleRef.current = null;
+    };
+  }, []);
 
   const go = useCallback(
     async (spec: ChannelSpec, opts: PublishOpts) => {
@@ -88,7 +91,7 @@ export function usePublisher(
 
         // 3. Publish to the cloud SFU (always — serves 4G listeners + captions).
         const trackName = `${spec.kind}-${spec.targetLocale ?? "orig"}`;
-        const handle = await publishTrack(mic, trackName);
+        const handle = await publishTrack(mic, trackName, sessionId);
         handleRef.current = handle;
         handle.onState((s) => {
           if (s === "connected") setState("live");

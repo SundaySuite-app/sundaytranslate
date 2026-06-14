@@ -178,15 +178,20 @@ export async function upsertChannel(
   return toView(data as ChannelRow);
 }
 
-/** A publisher (re)registered or dropped a channel's coordinates. Cloud SFU
- * coords are always written; the local-relay coords (mediamtx stream) are
- * written only when the publisher dual-published to a relay (`localStream`
- * provided). */
+/** A publisher (re)registered or dropped a channel. Going live writes the cloud
+ * SFU coordinates; going offline only flips `is_live` and keeps the last
+ * coordinates (no garbage placeholders). The local-relay coords (mediamtx
+ * stream) are written only when the publisher dual-published to a relay
+ * (`localStream` provided). Scoped to the authenticated session: the caller's
+ * secret was verified against `sessionId`, so the update is constrained to a
+ * channel owned by it — a secret-holder for session A can't redirect or knock
+ * offline a channel owned by session B. */
 export async function setChannelPublish(
+  sessionId: string,
   channelId: string,
   input: {
-    sfuSessionId: string;
-    trackName: string;
+    sfuSessionId?: string | null;
+    trackName?: string | null;
     live: boolean;
     localStream?: string | null;
     localLive?: boolean;
@@ -194,16 +199,18 @@ export async function setChannelPublish(
 ): Promise<void> {
   const sb = createServiceClient();
   const patch: Record<string, unknown> = {
-    sfu_session_id: input.sfuSessionId,
-    track_name: input.trackName,
     is_live: input.live,
     updated_at: new Date().toISOString(),
   };
+  if (input.live) {
+    patch.sfu_session_id = input.sfuSessionId ?? null;
+    patch.track_name = input.trackName ?? null;
+  }
   if (input.localStream !== undefined) {
     patch.local_stream = input.localStream;
     patch.local_is_live = input.localLive ?? false;
   }
-  await sb.from("channels").update(patch).eq("id", channelId);
+  await sb.from("channels").update(patch).eq("id", channelId).eq("session_id", sessionId);
 }
 
 export async function endSession(id: string): Promise<void> {

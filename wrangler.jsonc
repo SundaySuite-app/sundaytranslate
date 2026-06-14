@@ -14,13 +14,20 @@
   },
   // Workers AI — phase 2 (Whisper STT) + phase 3 (TTS). Free of per-request
   // setup; the route guards on the binding being present.
-  "ai": { "binding": "AI" }
-  // Runtime secrets (NEXT_PUBLIC_* are build-time inlined):
-  //   npx wrangler secret put SUPABASE_SERVICE_ROLE_KEY
-  //   npx wrangler secret put CF_REALTIME_APP_ID
+  "ai": { "binding": "AI" },
+  // Public config the SERVER reads at RUNTIME. NEXT_PUBLIC_* are inlined into the
+  // CLIENT bundle at build, but server code (lib/supabase/service.ts,
+  // lib/server/broadcast.ts) reads process.env.* inside the Worker — where
+  // build-time inlining does NOT reach — so they must be declared here, or
+  // host-start (POST /api/sessions) throws "Supabase env missing" → 500. These
+  // are public values (the anon key is designed to be public).
+  "vars": {
+    "NEXT_PUBLIC_SUPABASE_URL": "https://rkiahljrkormwzogghpc.supabase.co",
+    "NEXT_PUBLIC_BASE_URL": "https://translate.sundaysuite.app"
+  }
+  // Runtime SECRETS (set once via wrangler, never committed):
+  //   npx wrangler secret put SUPABASE_SERVICE_ROLE_KEY   # REQUIRED — host-start needs it
+  //   npx wrangler secret put CF_REALTIME_APP_ID          # audio transport (phase 1 audio)
   //   npx wrangler secret put CF_REALTIME_APP_TOKEN
-  //   npx wrangler secret put ANTHROPIC_API_KEY   # phase 2 captions (optional)
-  //
-  // Phase 2/3 (AI captions + synthetic voice) also bind Workers AI:
-  //   "ai": { "binding": "AI" }
+  //   npx wrangler secret put ANTHROPIC_API_KEY           # phase 2 captions (optional)
 }

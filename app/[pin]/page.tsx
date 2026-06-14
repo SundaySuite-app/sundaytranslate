@@ -18,7 +18,7 @@ export default function Listener() {
   const { channels, status } = useLiveChannels(id);
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
-  const sub = useSubscriber(audioRef, session?.localRelayUrl ?? null);
+  const sub = useSubscriber(audioRef, id, session?.localRelayUrl ?? null);
   const [aiVoice, setAiVoice] = useState(false);
   // Keep the screen awake while audio (human or AI) is playing.
   useWakeLock(sub.state === "playing" || sub.state === "connecting" || aiVoice);
@@ -44,7 +44,7 @@ export default function Listener() {
   const cap = useCaptions(id, capLocale);
 
   // Phase 3: optional AI voice — speak each caption line on this device.
-  useTtsVoice(cap.text, capLocale, aiVoice);
+  useTtsVoice(cap.text, capLocale, aiVoice, id);
 
   const sorted = useMemo(
     () => [...channels].sort((a, b) => (a.kind === "original" ? -1 : b.kind === "original" ? 1 : 0)),

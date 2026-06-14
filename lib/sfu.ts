@@ -19,14 +19,35 @@
  *      → SFU returns an OFFER (requiresImmediateRenegotiation)
  *   3. answer it                        PUT  /sessions/<id>/renegotiate (answer)
  *
- * NOTE: exact request/response shapes follow the stable Cloudflare Calls API.
- * Confirm against a live Realtime app during the rig test (needs real creds).
+ * VERIFIED against Cloudflare's official realtime-examples/echo client:
+ * base https://rtc.live.cloudflare.com/v1/apps/{APP_ID}; bodies use
+ * `sessionDescription` + `tracks[{location,mid,trackName,sessionId}]`; a remote
+ * pull returns `requiresImmediateRenegotiation` + an offer we answer. (Audio
+ * still needs a live rig test — creds, NAT traversal, iOS — but the API contract
+ * is confirmed.)
  */
 
 const RT = "/api/rt";
 
+/** ICE servers. Defaults to Cloudflare's STUN (enough when the client can reach
+ * the SFU's public endpoint directly). For restrictive church wifi / cellular,
+ * set NEXT_PUBLIC_RT_ICE to a JSON array of RTCIceServer incl. a Cloudflare TURN
+ * entry — no code change, just a deploy-time env. */
+function parseIce(): RTCIceServer[] {
+  const raw = process.env.NEXT_PUBLIC_RT_ICE;
+  if (raw) {
+    try {
+      const v = JSON.parse(raw);
+      if (Array.isArray(v) && v.length) return v as RTCIceServer[];
+    } catch {
+      /* fall through to default */
+    }
+  }
+  return [{ urls: "stun:stun.cloudflare.com:3478" }];
+}
+
 const ICE: RTCConfiguration = {
-  iceServers: [{ urls: "stun:stun.cloudflare.com:3478" }],
+  iceServers: parseIce(),
   bundlePolicy: "max-bundle",
 };
 
@@ -40,10 +61,17 @@ interface TracksResponse {
   tracks?: Array<{ mid?: string; trackName?: string; error?: string }>;
 }
 
-async function rt<T>(method: "POST" | "PUT", path: string, body: unknown): Promise<T> {
+async function rt<T>(
+  method: "POST" | "PUT",
+  path: string,
+  body: unknown,
+  sessionId: string,
+): Promise<T> {
   const res = await fetch(`${RT}/${path}`, {
     method,
-    headers: { "Content-Type": "application/json" },
+    // The proxy binds every SFU op to a live session (x-session-id) so the App
+    // Token can't be used to mint sessions outside a real SundayTranslate room.
+    headers: { "Content-Type": "application/json", "x-session-id": sessionId },
     body: JSON.stringify(body ?? {}),
   });
   if (!res.ok) throw new Error(`sfu ${path} → ${res.status}`);
@@ -75,10 +103,12 @@ export interface PublishHandle {
   stop: () => void;
 }
 
-/** Publish one audio track. `trackName` identifies it to subscribers. */
+/** Publish one audio track. `trackName` identifies it to subscribers.
+ * `appSessionId` is the SundayTranslate session id (the proxy's auth gate). */
 export async function publishTrack(
   stream: MediaStream,
   trackName: string,
+  appSessionId: string,
 ): Promise<PublishHandle> {
   const audio = stream.getAudioTracks()[0];
   if (!audio) throw new Error("no_audio_track");
@@ -89,11 +119,11 @@ export async function publishTrack(
   await pc.setLocalDescription(await pc.createOffer());
   await waitIceComplete(pc);
 
-  const { sessionId } = await rt<{ sessionId: string }>("POST", "sessions/new", {});
+  const { sessionId } = await rt<{ sessionId: string }>("POST", "sessions/new", {}, appSessionId);
   const ans = await rt<TracksResponse>("POST", `sessions/${sessionId}/tracks/new`, {
     sessionDescription: { type: "offer", sdp: pc.localDescription!.sdp },
     tracks: [{ location: "local", mid: tx.mid, trackName }],
-  });
+  }, appSessionId);
   if (ans.sessionDescription) {
     await pc.setRemoteDescription(ans.sessionDescription as RTCSessionDescriptionInit);
   }
@@ -116,21 +146,23 @@ export interface SubscribeHandle {
   stop: () => void;
 }
 
-/** Subscribe to a published track. `onStream` fires with the inbound audio. */
+/** Subscribe to a published track. `onStream` fires with the inbound audio.
+ * `appSessionId` is the SundayTranslate session id (the proxy's auth gate). */
 export async function subscribeTrack(
   remoteSfuSessionId: string,
   trackName: string,
   onStream: (stream: MediaStream) => void,
+  appSessionId: string,
 ): Promise<SubscribeHandle> {
   const pc = new RTCPeerConnection(ICE);
   pc.addEventListener("track", (e) => {
     onStream(e.streams[0] ?? new MediaStream([e.track]));
   });
 
-  const { sessionId } = await rt<{ sessionId: string }>("POST", "sessions/new", {});
+  const { sessionId } = await rt<{ sessionId: string }>("POST", "sessions/new", {}, appSessionId);
   const offer = await rt<TracksResponse>("POST", `sessions/${sessionId}/tracks/new`, {
     tracks: [{ location: "remote", sessionId: remoteSfuSessionId, trackName }],
-  });
+  }, appSessionId);
   if (!offer.sessionDescription) throw new Error("no_offer");
 
   await pc.setRemoteDescription(offer.sessionDescription as RTCSessionDescriptionInit);
@@ -138,7 +170,7 @@ export async function subscribeTrack(
   await waitIceComplete(pc);
   await rt("PUT", `sessions/${sessionId}/renegotiate`, {
     sessionDescription: { type: "answer", sdp: pc.localDescription!.sdp },
-  });
+  }, appSessionId);
 
   return {
     pc,
