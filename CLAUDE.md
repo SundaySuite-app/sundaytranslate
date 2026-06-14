@@ -63,12 +63,14 @@ listeners, never to the server logs. `verifySecret` gates every publish/end.
 
 ## ⚠️ Two things to confirm at rig-test
 
-1. **Cloudflare Realtime SFU request/response shapes** in `lib/sfu.ts` follow the
-   stable Cloudflare Calls tracks API but were written without live creds (docs
-   are SPA-rendered; couldn't fetch exact JSON). Confirm against a real Realtime
-   app; adjust `lib/sfu.ts` + `app/api/rt/[...path]/route.ts` if the shapes drift.
-   May also need **Cloudflare TURN** creds for listeners on cellular (host/srflx
-   candidates cover same-LAN; add TURN to `ICE` in `lib/sfu.ts`).
+1. **Cloudflare Realtime SFU shapes** in `lib/sfu.ts` are now **VERIFIED** against
+   Cloudflare's official `realtime-examples/echo` client — base, auth,
+   `/sessions/new`, `/tracks/new` (local+remote), `/renegotiate`, and the
+   `sessionDescription`/`tracks`/`requiresImmediateRenegotiation` fields all match.
+   What's left to prove at rig-test is the *live media path*: real creds, NAT
+   traversal, codecs. For restrictive church wifi / cellular, set
+   `NEXT_PUBLIC_RT_ICE` (JSON RTCIceServer[] incl. a **Cloudflare TURN** entry) —
+   no code change; default is Cloudflare STUN.
 2. **iOS audio under screen-lock** — the make-or-break UX. Mitigated with
    MediaSession + Wake Lock + gesture-primed `play()` (`useSubscriber` +
    `useWakeLock`). Test on a real iPhone with the screen locked and earbuds in.
