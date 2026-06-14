@@ -14,6 +14,18 @@ export async function POST(req: Request): Promise<Response> {
   const title = typeof body?.title === "string" ? body.title.slice(0, 120) : "";
   const sourceLocale =
     typeof body?.sourceLocale === "string" ? body.sourceLocale.slice(0, 8) : "no";
-  const session = await createSession({ title, sourceLocale });
-  return ok(session, { status: 201 });
+
+  try {
+    const session = await createSession({ title, sourceLocale });
+    return ok(session, { status: 201 });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    // A misconfigured deploy (missing Supabase env in the Worker) must not look
+    // like a generic crash — surface a clear 503 so the cause is obvious.
+    if (msg.includes("Supabase env missing")) {
+      return fail(503, "service_unconfigured", { detail: msg });
+    }
+    console.error("[create session]", msg);
+    return fail(500, "create_failed");
+  }
 }
