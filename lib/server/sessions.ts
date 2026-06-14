@@ -137,21 +137,23 @@ export async function upsertChannel(
   return toView(data as ChannelRow);
 }
 
-/** A publisher (re)registered or dropped a channel's SFU coordinates. */
+/** A publisher (re)registered or dropped a channel. Going live writes the SFU
+ * coordinates; going offline only flips `is_live` and keeps the last
+ * coordinates (no garbage placeholders). */
 export async function setChannelPublish(
   channelId: string,
-  input: { sfuSessionId: string; trackName: string; live: boolean },
+  input: { sfuSessionId?: string | null; trackName?: string | null; live: boolean },
 ): Promise<void> {
   const sb = createServiceClient();
-  await sb
-    .from("channels")
-    .update({
-      sfu_session_id: input.sfuSessionId,
-      track_name: input.trackName,
-      is_live: input.live,
-      updated_at: new Date().toISOString(),
-    })
-    .eq("id", channelId);
+  const patch: Record<string, unknown> = {
+    is_live: input.live,
+    updated_at: new Date().toISOString(),
+  };
+  if (input.live) {
+    patch.sfu_session_id = input.sfuSessionId ?? null;
+    patch.track_name = input.trackName ?? null;
+  }
+  await sb.from("channels").update(patch).eq("id", channelId);
 }
 
 export async function endSession(id: string): Promise<void> {

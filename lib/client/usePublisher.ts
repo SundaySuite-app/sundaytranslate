@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { publishTrack, type PublishHandle } from "@/lib/sfu";
 import type { ChannelKind } from "@/lib/types";
 
@@ -40,15 +40,18 @@ export function usePublisher(sessionId: string | null, secret: string | null) {
       fetch(`/api/sessions/${sessionId}/publish`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${secret}` },
-        body: JSON.stringify({
-          channelId: cid,
-          sfuSessionId: "x",
-          trackName: "x",
-          live: false,
-        }),
+        body: JSON.stringify({ channelId: cid, live: false }),
       }).catch(() => {});
     }
   }, [sessionId, secret]);
+
+  // Release the mic + peer connection if the page unmounts mid-broadcast.
+  useEffect(() => {
+    return () => {
+      handleRef.current?.stop();
+      handleRef.current = null;
+    };
+  }, []);
 
   const go = useCallback(
     async (spec: ChannelSpec, opts: PublishOpts) => {
