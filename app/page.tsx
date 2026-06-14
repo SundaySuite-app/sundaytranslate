@@ -25,8 +25,13 @@ export default function Landing() {
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error ?? "feil");
       router.push(`/o/${data.id}?pin=${data.pin}#${data.secret}`);
-    } catch {
-      setErr("Kunne ikke starte sesjonen. Prøv igjen.");
+    } catch (e) {
+      const code = e instanceof Error ? e.message : "";
+      setErr(
+        code === "service_unconfigured"
+          ? "Tjenesten er ikke ferdig satt opp ennå (mangler Supabase-nøkkel på serveren). Kontakt administrator."
+          : "Kunne ikke starte sesjonen. Prøv igjen.",
+      );
       setBusy(false);
     }
   }

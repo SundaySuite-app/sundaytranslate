@@ -92,12 +92,20 @@ and the migration applied + schema exposed.
 
 ## Deploy
 
+Public config (`NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_BASE_URL`) lives in
+`wrangler.jsonc` `vars` — the SERVER reads these at runtime in the Worker (build-
+time `NEXT_PUBLIC_*` inlining only reaches the client bundle). The only secret
+**required for host-start** is `SUPABASE_SERVICE_ROLE_KEY`; without it
+`POST /api/sessions` returns 503 `service_unconfigured` and `/api/health` says so.
+
 ```
 set -a && source .env.production.local && set +a
 npm run cf:build && npx opennextjs-cloudflare deploy
-npx wrangler secret put SUPABASE_SERVICE_ROLE_KEY
-npx wrangler secret put CF_REALTIME_APP_ID
+npx wrangler secret put SUPABASE_SERVICE_ROLE_KEY   # REQUIRED — host-start
+npx wrangler secret put CF_REALTIME_APP_ID          # audio transport
 npx wrangler secret put CF_REALTIME_APP_TOKEN
+# then re-deploy (or `wrangler deploy`) so the Worker picks up the secrets.
+# verify: curl -s https://translate.sundaysuite.app/api/health
 ```
 
 `production-branch`/custom domain `translate.sundaysuite.app` is in
