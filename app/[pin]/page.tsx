@@ -18,7 +18,7 @@ export default function Listener() {
   const { channels, status } = useLiveChannels(id);
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
-  const sub = useSubscriber(audioRef);
+  const sub = useSubscriber(audioRef, session?.localRelayUrl ?? null);
   const [aiVoice, setAiVoice] = useState(false);
   // Keep the screen awake while audio (human or AI) is playing.
   useWakeLock(sub.state === "playing" || sub.state === "connecting" || aiVoice);

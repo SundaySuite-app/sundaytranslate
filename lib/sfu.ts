@@ -146,3 +146,140 @@ export async function subscribeTrack(
     stop: () => pc.close(),
   };
 }
+
+/* ───────────────────────────────────────────────────────────────────────────
+ * LOCAL RELAY transport (WHIP/WHEP) — the on-LAN path.
+ *
+ * When a church runs the SundayTranslate Relay (a mediamtx-backed box on the
+ * local network), audio can stay on the wifi instead of round-tripping to
+ * Cloudflare: free, low-latency, in-building. The relay speaks the IETF
+ * WHIP (publish) / WHEP (subscribe) standard — a single POST that exchanges an
+ * SDP offer for an answer — which is far simpler than Cloudflare's tracks API.
+ *
+ * These are ADDITIVE: the cloud path above is unchanged. A publisher
+ * dual-publishes (cloud + relay) and a listener prefers the relay when it is
+ * reachable, else falls back to the cloud. NOTE: untested against a live
+ * mediamtx — confirm SDP/answer + resource-DELETE semantics at rig test.
+ * ─────────────────────────────────────────────────────────────────────────── */
+
+/** A transport-agnostic media handle (relay path has no SFU session id). */
+export interface MediaHandle {
+  pc: RTCPeerConnection;
+  onState: (cb: (s: RTCPeerConnectionState) => void) => void;
+  stop: () => void;
+}
+
+const stripSlash = (s: string) => s.replace(/\/+$/, "");
+/** WHIP ingest URL for a stream on a relay base, e.g. `<base>/<stream>/whip`. */
+export const whipUrl = (base: string, stream: string) => `${stripSlash(base)}/${stream}/whip`;
+/** WHEP egress URL for a stream on a relay base, e.g. `<base>/<stream>/whep`. */
+export const whepUrl = (base: string, stream: string) => `${stripSlash(base)}/${stream}/whep`;
+
+/** Resolve a WHIP/WHEP `Location` (may be relative) against the request URL. */
+function resolveResource(requestUrl: string, location: string): string {
+  try {
+    return new URL(location, requestUrl).toString();
+  } catch {
+    return location;
+  }
+}
+
+/** Cheap reachability probe so a listener can decide local-vs-cloud fast
+ * (a failed WebRTC attempt is slow). The relay serves `<base>/healthz`. */
+export async function relayReachable(base: string, timeoutMs = 1500): Promise<boolean> {
+  try {
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), timeoutMs);
+    const res = await fetch(`${stripSlash(base)}/healthz`, {
+      signal: ctrl.signal,
+      mode: "cors",
+      cache: "no-store",
+    });
+    clearTimeout(t);
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
+/** Publish one audio track to a relay via WHIP. */
+export async function publishTrackWhip(
+  stream: MediaStream,
+  endpoint: string,
+  token?: string,
+): Promise<MediaHandle> {
+  const audio = stream.getAudioTracks()[0];
+  if (!audio) throw new Error("no_audio_track");
+
+  const pc = new RTCPeerConnection(ICE);
+  pc.addTransceiver(audio, { direction: "sendonly" });
+  await pc.setLocalDescription(await pc.createOffer());
+  await waitIceComplete(pc);
+
+  const res = await fetch(endpoint, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/sdp",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: pc.localDescription!.sdp,
+  });
+  if (!res.ok) {
+    pc.close();
+    throw new Error(`whip ${res.status}`);
+  }
+  const answer = await res.text();
+  const location = res.headers.get("Location");
+  const resource = location ? resolveResource(endpoint, location) : null;
+  await pc.setRemoteDescription({ type: "answer", sdp: answer });
+
+  return {
+    pc,
+    onState: (cb) =>
+      pc.addEventListener("connectionstatechange", () => cb(pc.connectionState)),
+    stop: () => {
+      audio.stop();
+      pc.close();
+      if (resource) void fetch(resource, { method: "DELETE" }).catch(() => {});
+    },
+  };
+}
+
+/** Subscribe to a relay stream via WHEP. `onStream` fires with the audio. */
+export async function subscribeTrackWhep(
+  endpoint: string,
+  onStream: (stream: MediaStream) => void,
+): Promise<MediaHandle> {
+  const pc = new RTCPeerConnection(ICE);
+  pc.addTransceiver("audio", { direction: "recvonly" });
+  pc.addEventListener("track", (e) => {
+    onStream(e.streams[0] ?? new MediaStream([e.track]));
+  });
+
+  await pc.setLocalDescription(await pc.createOffer());
+  await waitIceComplete(pc);
+
+  const res = await fetch(endpoint, {
+    method: "POST",
+    headers: { "Content-Type": "application/sdp" },
+    body: pc.localDescription!.sdp,
+  });
+  if (!res.ok) {
+    pc.close();
+    throw new Error(`whep ${res.status}`);
+  }
+  const answer = await res.text();
+  const location = res.headers.get("Location");
+  const resource = location ? resolveResource(endpoint, location) : null;
+  await pc.setRemoteDescription({ type: "answer", sdp: answer });
+
+  return {
+    pc,
+    onState: (cb) =>
+      pc.addEventListener("connectionstatechange", () => cb(pc.connectionState)),
+    stop: () => {
+      pc.close();
+      if (resource) void fetch(resource, { method: "DELETE" }).catch(() => {});
+    },
+  };
+}
