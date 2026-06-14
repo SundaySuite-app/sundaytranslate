@@ -185,18 +185,22 @@ function resolveResource(requestUrl: string, location: string): string {
 }
 
 /** Cheap reachability probe so a listener can decide local-vs-cloud fast
- * (a failed WebRTC attempt is slow). The relay serves `<base>/healthz`. */
+ * (a failed WebRTC attempt is slow). ANY HTTP response means the relay's HTTPS
+ * server answered on the LAN and CORS let us read it → reachable. mediamtx 404s
+ * unknown paths (verified v1.9.3, with `access-control-allow-origin: *`), so we
+ * must NOT require res.ok — only a network error / timeout / cert failure (which
+ * throws) means not reachable, and the listener falls back to the cloud. */
 export async function relayReachable(base: string, timeoutMs = 1500): Promise<boolean> {
   try {
     const ctrl = new AbortController();
     const t = setTimeout(() => ctrl.abort(), timeoutMs);
-    const res = await fetch(`${stripSlash(base)}/healthz`, {
+    await fetch(`${stripSlash(base)}/`, {
       signal: ctrl.signal,
       mode: "cors",
       cache: "no-store",
     });
     clearTimeout(t);
-    return res.ok;
+    return true;
   } catch {
     return false;
   }
