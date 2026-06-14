@@ -139,8 +139,12 @@ export async function upsertChannel(
 
 /** A publisher (re)registered or dropped a channel. Going live writes the SFU
  * coordinates; going offline only flips `is_live` and keeps the last
- * coordinates (no garbage placeholders). */
+ * coordinates (no garbage placeholders). Scoped to the authenticated session:
+ * the caller's secret was verified against `sessionId`, so the update is
+ * constrained to a channel owned by it — a secret-holder for session A can't
+ * redirect or knock offline a channel owned by session B. */
 export async function setChannelPublish(
+  sessionId: string,
   channelId: string,
   input: { sfuSessionId?: string | null; trackName?: string | null; live: boolean },
 ): Promise<void> {
@@ -153,7 +157,7 @@ export async function setChannelPublish(
     patch.sfu_session_id = input.sfuSessionId ?? null;
     patch.track_name = input.trackName ?? null;
   }
-  await sb.from("channels").update(patch).eq("id", channelId);
+  await sb.from("channels").update(patch).eq("id", channelId).eq("session_id", sessionId);
 }
 
 export async function endSession(id: string): Promise<void> {

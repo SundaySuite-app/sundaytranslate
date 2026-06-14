@@ -9,7 +9,10 @@ export type ListenState = "idle" | "connecting" | "playing" | "error";
 /** Listener-side audio subscription. One active channel at a time. iOS-safe:
  * the play() is primed inside the user's tap, then re-issued when the inbound
  * track arrives; a single reused AudioContext resume unlocks audio on Safari. */
-export function useSubscriber(audioRef: React.RefObject<HTMLAudioElement | null>) {
+export function useSubscriber(
+  audioRef: React.RefObject<HTMLAudioElement | null>,
+  sessionId: string | null,
+) {
   const [activeId, setActiveId] = useState<string | null>(null);
   const [state, setState] = useState<ListenState>("idle");
   const handleRef = useRef<SubscribeHandle | null>(null);
@@ -56,7 +59,7 @@ export function useSubscriber(audioRef: React.RefObject<HTMLAudioElement | null>
       handleRef.current?.stop();
       handleRef.current = null;
 
-      if (!channel.sfuSessionId || !channel.trackName) {
+      if (!channel.sfuSessionId || !channel.trackName || !sessionId) {
         setState("error");
         return;
       }
@@ -64,12 +67,17 @@ export function useSubscriber(audioRef: React.RefObject<HTMLAudioElement | null>
       setState("connecting");
 
       try {
-        const handle = await subscribeTrack(channel.sfuSessionId, channel.trackName, (stream) => {
-          if (el) {
-            el.srcObject = stream;
-            el.play().catch(() => {});
-          }
-        });
+        const handle = await subscribeTrack(
+          channel.sfuSessionId,
+          channel.trackName,
+          (stream) => {
+            if (el) {
+              el.srcObject = stream;
+              el.play().catch(() => {});
+            }
+          },
+          sessionId,
+        );
         handleRef.current = handle;
         handle.onState((s) => {
           if (s === "connected") setState("playing");
@@ -86,7 +94,7 @@ export function useSubscriber(audioRef: React.RefObject<HTMLAudioElement | null>
         setState("error");
       }
     },
-    [audioRef],
+    [audioRef, sessionId],
   );
 
   return { activeId, state, listen, stop };

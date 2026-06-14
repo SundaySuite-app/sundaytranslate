@@ -32,7 +32,7 @@ export async function POST(
   // Going live needs the coordinates; going offline just needs the channel.
   if (live && (!body.sfuSessionId || !body.trackName)) return fail(400, "missing_fields");
 
-  await setChannelPublish(body.channelId, {
+  await setChannelPublish(id, body.channelId, {
     sfuSessionId: body.sfuSessionId,
     trackName: body.trackName,
     live,

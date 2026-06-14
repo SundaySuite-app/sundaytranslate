@@ -6,7 +6,12 @@ import { useCallback, useEffect, useRef } from "react";
  * to /api/tts and the returned audio is played in sequence. No server-side
  * WebRTC: the listener's own device speaks the translation. Best-effort and
  * experimental (latency + per-line chunking; limited language coverage). */
-export function useTtsVoice(text: string, locale: string, enabled: boolean): void {
+export function useTtsVoice(
+  text: string,
+  locale: string,
+  enabled: boolean,
+  sessionId: string | null,
+): void {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const queueRef = useRef<string[]>([]);
   const playingRef = useRef(false);
@@ -56,14 +61,14 @@ export function useTtsVoice(text: string, locale: string, enabled: boolean): voi
   // Synthesize each fresh line.
   useEffect(() => {
     const line = text.trim();
-    if (!enabled || !line || line === lastRef.current) return;
+    if (!enabled || !line || !sessionId || line === lastRef.current) return;
     lastRef.current = line;
     let alive = true;
     (async () => {
       try {
         const res = await fetch("/api/tts", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: { "Content-Type": "application/json", "x-session-id": sessionId },
           body: JSON.stringify({ text: line, locale }),
         });
         if (!res.ok || !alive) return;
@@ -78,5 +83,5 @@ export function useTtsVoice(text: string, locale: string, enabled: boolean): voi
     return () => {
       alive = false;
     };
-  }, [text, locale, enabled, playNext]);
+  }, [text, locale, enabled, sessionId, playNext]);
 }
