@@ -39,8 +39,12 @@ export function useTtsVoice(
       playNext();
     };
     audioRef.current = el;
+    const queue = queueRef;
     return () => {
       el.pause();
+      if (el.src.startsWith("blob:")) URL.revokeObjectURL(el.src);
+      queue.current.forEach((u) => URL.revokeObjectURL(u));
+      queue.current = [];
       audioRef.current = null;
     };
   }, [playNext]);

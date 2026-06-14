@@ -63,12 +63,14 @@ listeners, never to the server logs. `verifySecret` gates every publish/end.
 
 ## ⚠️ Two things to confirm at rig-test
 
-1. **Cloudflare Realtime SFU request/response shapes** in `lib/sfu.ts` follow the
-   stable Cloudflare Calls tracks API but were written without live creds (docs
-   are SPA-rendered; couldn't fetch exact JSON). Confirm against a real Realtime
-   app; adjust `lib/sfu.ts` + `app/api/rt/[...path]/route.ts` if the shapes drift.
-   May also need **Cloudflare TURN** creds for listeners on cellular (host/srflx
-   candidates cover same-LAN; add TURN to `ICE` in `lib/sfu.ts`).
+1. **Cloudflare Realtime SFU shapes** in `lib/sfu.ts` are now **VERIFIED** against
+   Cloudflare's official `realtime-examples/echo` client — base, auth,
+   `/sessions/new`, `/tracks/new` (local+remote), `/renegotiate`, and the
+   `sessionDescription`/`tracks`/`requiresImmediateRenegotiation` fields all match.
+   What's left to prove at rig-test is the *live media path*: real creds, NAT
+   traversal, codecs. For restrictive church wifi / cellular, set
+   `NEXT_PUBLIC_RT_ICE` (JSON RTCIceServer[] incl. a **Cloudflare TURN** entry) —
+   no code change; default is Cloudflare STUN.
 2. **iOS audio under screen-lock** — the make-or-break UX. Mitigated with
    MediaSession + Wake Lock + gesture-primed `play()` (`useSubscriber` +
    `useWakeLock`). Test on a real iPhone with the screen locked and earbuds in.
@@ -90,12 +92,20 @@ and the migration applied + schema exposed.
 
 ## Deploy
 
+Public config (`NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_BASE_URL`) lives in
+`wrangler.jsonc` `vars` — the SERVER reads these at runtime in the Worker (build-
+time `NEXT_PUBLIC_*` inlining only reaches the client bundle). The only secret
+**required for host-start** is `SUPABASE_SERVICE_ROLE_KEY`; without it
+`POST /api/sessions` returns 503 `service_unconfigured` and `/api/health` says so.
+
 ```
 set -a && source .env.production.local && set +a
 npm run cf:build && npx opennextjs-cloudflare deploy
-npx wrangler secret put SUPABASE_SERVICE_ROLE_KEY
-npx wrangler secret put CF_REALTIME_APP_ID
+npx wrangler secret put SUPABASE_SERVICE_ROLE_KEY   # REQUIRED — host-start
+npx wrangler secret put CF_REALTIME_APP_ID          # audio transport
 npx wrangler secret put CF_REALTIME_APP_TOKEN
+# then re-deploy (or `wrangler deploy`) so the Worker picks up the secrets.
+# verify: curl -s https://translate.sundaysuite.app/api/health
 ```
 
 `production-branch`/custom domain `translate.sundaysuite.app` is in

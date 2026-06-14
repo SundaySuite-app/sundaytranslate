@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { subscribeTrack, type SubscribeHandle } from "@/lib/sfu";
 import type { ChannelView } from "@/lib/types";
 
@@ -8,7 +8,7 @@ export type ListenState = "idle" | "connecting" | "playing" | "error";
 
 /** Listener-side audio subscription. One active channel at a time. iOS-safe:
  * the play() is primed inside the user's tap, then re-issued when the inbound
- * track arrives; an AudioContext resume unlocks audio on Safari. */
+ * track arrives; a single reused AudioContext resume unlocks audio on Safari. */
 export function useSubscriber(
   audioRef: React.RefObject<HTMLAudioElement | null>,
   sessionId: string | null,
@@ -16,6 +16,7 @@ export function useSubscriber(
   const [activeId, setActiveId] = useState<string | null>(null);
   const [state, setState] = useState<ListenState>("idle");
   const handleRef = useRef<SubscribeHandle | null>(null);
+  const ctxRef = useRef<AudioContext | null>(null);
 
   const stop = useCallback(() => {
     handleRef.current?.stop();
@@ -25,16 +26,31 @@ export function useSubscriber(
     if (audioRef.current) audioRef.current.srcObject = null;
   }, [audioRef]);
 
+  // Tear down the peer connection + audio context when the listener unmounts
+  // (session ended, navigated away) — otherwise the PC keeps pulling audio.
+  useEffect(() => {
+    const ctx = ctxRef;
+    return () => {
+      handleRef.current?.stop();
+      handleRef.current = null;
+      ctx.current?.close().catch(() => {});
+      ctx.current = null;
+    };
+  }, []);
+
   const listen = useCallback(
     async (channel: ChannelView) => {
-      // Prime playback inside the gesture tick (iOS autoplay unlock).
+      // Prime playback inside the gesture tick (iOS autoplay unlock). Reuse a
+      // single AudioContext — creating one per tap leaks them (iOS caps ~6).
       const el = audioRef.current;
       try {
-        const AC =
-          window.AudioContext ||
-          (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-        const ctx = new AC();
-        if (ctx.state === "suspended") await ctx.resume();
+        if (!ctxRef.current) {
+          const AC =
+            window.AudioContext ||
+            (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+          ctxRef.current = new AC();
+        }
+        if (ctxRef.current.state === "suspended") await ctxRef.current.resume();
       } catch {
         /* ignore */
       }
