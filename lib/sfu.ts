@@ -202,11 +202,13 @@ export async function relayReachable(base: string, timeoutMs = 1500): Promise<bo
   }
 }
 
-/** Publish one audio track to a relay via WHIP. */
+/** Publish one audio track to a relay via WHIP. `secret` is the session secret;
+ * mediamtx's internal auth expects HTTP Basic as user `publish` (verified the
+ * config loads on mediamtx v1.9.3 — NOT a Bearer token). */
 export async function publishTrackWhip(
   stream: MediaStream,
   endpoint: string,
-  token?: string,
+  secret?: string,
 ): Promise<MediaHandle> {
   const audio = stream.getAudioTracks()[0];
   if (!audio) throw new Error("no_audio_track");
@@ -220,7 +222,7 @@ export async function publishTrackWhip(
     method: "POST",
     headers: {
       "Content-Type": "application/sdp",
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...(secret ? { Authorization: `Basic ${btoa(`publish:${secret}`)}` } : {}),
     },
     body: pc.localDescription!.sdp,
   });
