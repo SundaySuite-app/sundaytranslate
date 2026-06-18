@@ -23,11 +23,19 @@
   // are public values (the anon key is designed to be public).
   "vars": {
     "NEXT_PUBLIC_SUPABASE_URL": "https://rkiahljrkormwzogghpc.supabase.co",
-    "NEXT_PUBLIC_BASE_URL": "https://translate.sundaysuite.app"
+    "NEXT_PUBLIC_BASE_URL": "https://translate.sundaysuite.app",
+    // OPTIONAL Sunday-Account host login. The SERVER (middleware) reads these at
+    // runtime in the Worker, so they must live here as well as in the client
+    // bundle. Public values (issuer URL + anon key are designed to be public).
+    // Fill the issuer project ref + anon key before enabling host login.
+    "NEXT_PUBLIC_SUNDAY_AUTH_URL": "https://REPLACE-issuer-ref.supabase.co",
+    "NEXT_PUBLIC_SUNDAY_AUTH_ANON_KEY": "REPLACE-issuer-anon-key",
+    "NEXT_PUBLIC_COOKIE_DOMAIN": ".sundaysuite.app"
   }
   // Runtime SECRETS (set once via wrangler, never committed):
   //   npx wrangler secret put SUPABASE_SERVICE_ROLE_KEY   # REQUIRED — host-start needs it
   //   npx wrangler secret put CF_REALTIME_APP_ID          # audio transport (phase 1 audio)
   //   npx wrangler secret put CF_REALTIME_APP_TOKEN
   //   npx wrangler secret put ANTHROPIC_API_KEY           # phase 2 captions (optional)
+  //   npx wrangler secret put TRANSLATE_ADMIN_EMAILS      # host allowlist (the one authz gate)
 }
