@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useParams } from "next/navigation";
 import { VuMeter } from "@/components/VuMeter";
+import { InlineError } from "@/components/InlineError";
 import { useHashSecret, useVuMeter, useAudioInputs } from "@/lib/client/hooks";
 import { useStaffSession } from "@/lib/client/useStaffSession";
 import { usePublisher } from "@/lib/client/usePublisher";
@@ -60,14 +61,29 @@ export default function Source() {
   const live = pub.state === "live";
 
   return (
-    <main className="center-screen">
+    <main className="center-screen" aria-labelledby="kilde-title">
       <div className="wrap" style={{ maxWidth: 520 }}>
-        <div className="card stack">
-          <div className="kicker">🎚️ Lydkort · kilde</div>
-          <h1 style={{ fontSize: 24 }}>{session?.title || "Original-lyd"}</h1>
+        <div className="card stack" role="region" aria-label="Kilde-konsoll for lydkort">
+          <div className="kicker">
+            <span aria-hidden="true">🎚️ </span>Lydkort · kilde
+          </div>
+          <h1 id="kilde-title" style={{ fontSize: 24 }}>{session?.title || "Original-lyd"}</h1>
           <p className="muted" style={{ marginTop: 0 }}>
             Sender menighetens lyd til lytternes telefoner — oversettelse og
             lytteanlegg for hørselshemmede.
+          </p>
+
+          {/* Live status, announced to screen readers as it changes. */}
+          <p role="status" aria-live="polite" className="visually-hidden">
+            {pub.state === "connecting"
+              ? "Kobler til…"
+              : live
+                ? "Sender original-lyd nå."
+                : pub.state === "error"
+                  ? "Tilkobling feilet."
+                  : granted
+                    ? "Klar til å starte sending."
+                    : "Mangler tilgang til lyd."}
           </p>
 
           {!granted ? (
@@ -86,6 +102,7 @@ export default function Source() {
                   value={device}
                   onChange={(e) => setDevice(e.target.value)}
                   disabled={live}
+                  aria-label="Velg lydinngang"
                 >
                   <option value="">Standard inngang</option>
                   {devices.map((d) => (
@@ -96,13 +113,14 @@ export default function Source() {
                 </select>
               </div>
 
-              {pub.stream && <VuMeter level={level} />}
+              {pub.stream && <VuMeter level={level} label="Inngangsnivå" />}
 
               {!live ? (
                 <button
                   className="btn btn-primary btn-lg btn-block"
                   onClick={start}
                   disabled={pub.state === "connecting"}
+                  aria-busy={pub.state === "connecting"}
                 >
                   {pub.state === "connecting" ? "Kobler til…" : "Start sending"}
                 </button>
@@ -115,7 +133,7 @@ export default function Source() {
               <p className="muted" style={{ fontSize: 14, margin: 0 }}>
                 {live ? (
                   <>
-                    <span className="live-dot" /> Sender original-lyd
+                    <span className="live-dot" aria-hidden="true" /> Sender original-lyd
                   </>
                 ) : (
                   "Velg lydkortet fra mikseren og trykk start."
@@ -142,9 +160,9 @@ export default function Source() {
                 </label>
               )}
               {pub.state === "error" && (
-                <p style={{ color: "var(--danger)", margin: 0 }}>
+                <InlineError>
                   Tilkobling feilet. Sjekk lydkilde og nett, og prøv igjen.
-                </p>
+                </InlineError>
               )}
             </>
           )}

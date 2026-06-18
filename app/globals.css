@@ -1,13 +1,13 @@
 /* SundayTranslate — design foundation.
-   Sunday Suite brand thread (gold #D4A73A · ink ground · Playfair Display +
+   Sunday Suite brand thread (gold #EBB84B · ink ground · Playfair Display +
    Hanken Grotesk) with this app's own jewel tone: a communication TEAL/AZURE
    — voice carried across a room. Fonts injected by next/font in layout.tsx. */
 
 :root {
-  /* suite thread */
-  --gold: #d4a73a;
-  --gold-light: #eccb7a;
-  --gold-deep: #b88a26;
+  /* suite thread — canonical brand gold (matches the marketing site) */
+  --gold: #ebb84b;
+  --gold-light: #f2d58a;
+  --gold-deep: #d4a23a;
 
   /* ground */
   --ink: #0e1418;
@@ -61,6 +61,7 @@ body {
 
 body {
   min-height: 100dvh;
+  overflow-x: clip; /* nothing should bleed past the viewport horizontally */
   background:
     radial-gradient(1200px 700px at 50% -10%, rgba(43, 179, 192, 0.1), transparent 60%),
     radial-gradient(900px 600px at 90% 110%, rgba(212, 167, 58, 0.06), transparent 55%),
@@ -85,6 +86,38 @@ a {
   text-decoration: none;
 }
 
+/* Accessible focus ring — gold, visible only for keyboard users. */
+:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--gold) 55%, transparent);
+  border-radius: 6px;
+}
+a:focus-visible,
+.btn:focus-visible,
+.channel:focus-visible,
+summary:focus-visible,
+.input:focus-visible,
+.select:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--gold) 55%, transparent);
+}
+.input:focus-visible,
+.select:focus-visible {
+  border-color: var(--accent);
+}
+
+/* Respect users who prefer less motion. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
 /* layout utilities */
 .wrap {
   width: 100%;
@@ -96,8 +129,17 @@ a {
 .center-screen {
   min-height: 100dvh;
   display: grid;
-  place-items: center;
+  /* minmax(0, …) lets the single column shrink below the intrinsic width of an
+     unbreakable child (e.g. the wordmark), so nothing pushes the content
+     off-centre or past the viewport on narrow screens. */
+  grid-template-columns: minmax(0, 1fr);
+  align-items: center;
+  justify-items: center;
   padding: 32px 20px;
+}
+.center-screen > * {
+  min-width: 0;
+  max-width: 100%;
 }
 
 .stack {
@@ -292,4 +334,78 @@ a {
   clip: rect(0, 0, 0, 0);
   white-space: nowrap;
   border: 0;
+}
+
+/* Loading spinner — gentle ring; honours prefers-reduced-motion globally. */
+.spinner {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 3px solid var(--ink-line-strong);
+  border-top-color: var(--accent);
+  animation: spin 0.9s linear infinite;
+}
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Inline error — a consistent, styled message used across all consoles instead
+   of bare <p> tags or alert(). Announced via role="alert" in the markup. */
+.alert {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: var(--radius-sm);
+  border: 1px solid color-mix(in srgb, var(--danger) 45%, transparent);
+  background: color-mix(in srgb, var(--danger) 12%, var(--ink-2));
+  color: var(--txt);
+  font-size: 14px;
+  line-height: 1.5;
+  margin: 0;
+}
+.alert::before {
+  content: "⚠";
+  color: var(--danger);
+  font-size: 16px;
+  line-height: 1.4;
+  flex-shrink: 0;
+}
+
+/* Responsive — phones (≈390px). The staff consoles are dense; relax padding,
+   stack rows that would otherwise overflow, and keep targets ≥44px. */
+@media (max-width: 560px) {
+  .wrap {
+    padding: 0 16px;
+  }
+  .card {
+    padding: 20px;
+  }
+  .btn {
+    min-height: 48px;
+  }
+  .btn-lg {
+    font-size: 17px;
+    padding: 16px 20px;
+    min-height: 56px;
+  }
+  .channel {
+    font-size: 16px;
+    padding: 14px 14px;
+  }
+  /* operator: PIN + QR scale down gracefully on a phone */
+  .pin {
+    font-size: clamp(36px, 13vw, 64px);
+  }
+}
+
+@media (max-width: 400px) {
+  .center-screen {
+    padding: 20px 14px;
+  }
+  .card {
+    padding: 18px 16px;
+  }
 }

@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { isValidPin } from "@/lib/codes";
 import { LANGS } from "@/lib/locales";
+import { InlineError } from "@/components/InlineError";
 
 export default function Landing() {
   const router = useRouter();
@@ -48,8 +49,9 @@ export default function Landing() {
         <div className="stack" style={{ gap: 28 }}>
           <header className="stack" style={{ gap: 8, textAlign: "center" }}>
             <div className="kicker">Sunday Suite</div>
-            <h1 style={{ fontSize: "clamp(34px,7vw,52px)" }}>
-              Sunday<span style={{ color: "var(--accent)" }}>Translate</span>
+            <h1 style={{ fontSize: "clamp(30px,8.5vw,52px)", overflowWrap: "break-word" }}>
+              Sunday<wbr />
+              <span style={{ color: "var(--accent)" }}>Translate</span>
             </h1>
             <p className="muted" style={{ fontSize: 18, margin: 0 }}>
               Live oversettelse og lytteanlegg for menigheten. Tolken leser inn
@@ -58,7 +60,7 @@ export default function Landing() {
           </header>
 
           {/* Listener join */}
-          <form className="card stack" onSubmit={join}>
+          <form className="card stack" onSubmit={join} aria-label="Bli med som lytter">
             <div className="field">
               <label className="label" htmlFor="pin">
                 Har du en PIN-kode? Bli med
@@ -115,15 +117,18 @@ export default function Landing() {
                   ))}
                 </select>
               </div>
-              <button className="btn btn-primary btn-block" onClick={start} disabled={busy}>
+              <button
+                className="btn btn-primary btn-block"
+                onClick={start}
+                disabled={busy}
+                aria-busy={busy}
+              >
                 {busy ? "Starter…" : "Start sesjon"}
               </button>
             </div>
           </details>
 
-          {err && (
-            <p style={{ color: "var(--danger)", textAlign: "center", margin: 0 }}>{err}</p>
-          )}
+          <InlineError>{err}</InlineError>
           <p className="muted" style={{ fontSize: 13, textAlign: "center", margin: 0 }}>
             Ingen lyd tas opp. Bruk ørepropper for best opplevelse.
           </p>

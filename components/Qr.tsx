@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import QRCode from "qrcode";
 
 /** Render a QR code for `value` as a data-URL image. Client-side only. */
-export function Qr({ value, size = 220 }: { value: string; size?: number }) {
+export function Qr({ value, size = 220, alt = "QR-kode" }: { value: string; size?: number; alt?: string }) {
   const [src, setSrc] = useState<string>("");
   useEffect(() => {
     let alive = true;
@@ -23,5 +23,5 @@ export function Qr({ value, size = 220 }: { value: string; size?: number }) {
   }, [value, size]);
   if (!src) return <div style={{ width: size, height: size }} aria-hidden />;
   // eslint-disable-next-line @next/next/no-img-element
-  return <img src={src} width={size} height={size} alt="QR" style={{ borderRadius: 12 }} />;
+  return <img src={src} width={size} height={size} alt={alt} style={{ borderRadius: 12 }} />;
 }
