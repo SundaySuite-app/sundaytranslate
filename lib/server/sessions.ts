@@ -14,6 +14,7 @@ interface SessionRow {
   expires_at: string;
   local_relay_url: string | null;
   local_relay_expires_at: string | null;
+  host_user_id: string | null;
 }
 
 interface ChannelRow {
@@ -46,21 +47,99 @@ function toView(r: ChannelRow): ChannelView {
   };
 }
 
-/** Create a session with a unique active PIN + a write secret (returned once). */
+/** Create a session with a unique active PIN + a write secret (returned once).
+ *
+ * `hostUserId` is OPTIONAL owner provenance from the Sunday-Account login: when
+ * a signed-in host starts a session it is stamped so the host can later find it
+ * in their dashboard. Anonymous create passes null and behaves exactly as
+ * before. The stamping itself is best-effort upstream (the API route never
+ * fails the create just because owner resolution failed). */
 export async function createSession(input: {
   title: string;
   sourceLocale: string;
   churchId?: string | null;
+  hostUserId?: string | null;
 }): Promise<CreatedSession> {
   const sb = createServiceClient();
-  const { data, error } = await sb.rpc("create_session", {
+  const { data, error } = await sb.rpc("create_session_owned", {
     p_title: input.title,
     p_source_locale: input.sourceLocale,
+    p_host_user_id: input.hostUserId ?? null,
     p_church_id: input.churchId ?? null,
   });
   if (error) throw error;
   const row = (Array.isArray(data) ? data[0] : data) as { id: string; pin: string; secret: string };
   return { id: row.id, pin: row.pin, secret: row.secret };
+}
+
+/** A row in the host's "my oversettelses-sesjons" dashboard. */
+export interface OwnedSession {
+  id: string;
+  pin: string;
+  title: string;
+  sourceLocale: string;
+  status: "live" | "ended";
+  createdAt: string;
+  expiresAt: string;
+}
+
+/** List the sessions owned by a given Sunday-Account host, newest first. */
+export async function listSessionsByOwner(hostUserId: string): Promise<OwnedSession[]> {
+  const sb = createServiceClient();
+  const { data, error } = await sb
+    .from("sessions")
+    .select("id, pin, title, source_locale, status, created_at, expires_at")
+    .eq("host_user_id", hostUserId)
+    .order("created_at", { ascending: false });
+  if (error) throw error;
+  return ((data as Array<Omit<SessionRow, "secret" | "local_relay_url" | "local_relay_expires_at" | "host_user_id">> | null) ?? []).map(
+    (r) => ({
+      id: r.id,
+      pin: r.pin,
+      title: r.title,
+      sourceLocale: r.source_locale,
+      status: r.status,
+      createdAt: r.created_at,
+      expiresAt: r.expires_at,
+    }),
+  );
+}
+
+/** Owner-gated read of a session's PIN + write secret, so the dashboard can
+ * deep-link the host back into their operator console. Returns null when the
+ * session doesn't exist or isn't owned by this host. */
+export async function getOwnedSessionSecret(
+  id: string,
+  hostUserId: string,
+): Promise<{ pin: string; secret: string } | null> {
+  const sb = createServiceClient();
+  const { data, error } = await sb
+    .from("sessions")
+    .select("pin, secret")
+    .eq("id", id)
+    .eq("host_user_id", hostUserId)
+    .maybeSingle();
+  if (error) throw error;
+  const row = data as { pin: string; secret: string } | null;
+  return row ? { pin: row.pin, secret: row.secret } : null;
+}
+
+/** Owner-gated delete. Returns true if the row belonged to the host and was
+ * removed; false if it didn't exist or is owned by someone else (so the route
+ * can answer 404 without leaking other hosts' ids). Channels (and captions)
+ * cascade via the FK / explicit cleanup. */
+export async function deleteSessionOwned(id: string, hostUserId: string): Promise<boolean> {
+  const sb = createServiceClient();
+  // captions has no FK cascade to sessions — clear it first, best-effort.
+  await sb.from("captions").delete().eq("session_id", id);
+  const { data, error } = await sb
+    .from("sessions")
+    .delete()
+    .eq("id", id)
+    .eq("host_user_id", hostUserId)
+    .select("id");
+  if (error) throw error;
+  return Array.isArray(data) && data.length > 0;
 }
 
 /** Resolve a PIN to a live session (no secret). */

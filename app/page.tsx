@@ -1,9 +1,11 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { isValidPin } from "@/lib/codes";
 import { LANGS } from "@/lib/locales";
+import { hostStrings } from "@/lib/host-strings";
 
 export default function Landing() {
   const router = useRouter();
@@ -126,6 +128,9 @@ export default function Landing() {
           )}
           <p className="muted" style={{ fontSize: 13, textAlign: "center", margin: 0 }}>
             Ingen lyd tas opp. Bruk ørepropper for best opplevelse.
+          </p>
+          <p className="muted" style={{ fontSize: 12, textAlign: "center", margin: 0 }}>
+            <Link href="/host">{hostStrings.hostLink}</Link>
           </p>
         </div>
       </div>

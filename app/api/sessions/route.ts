@@ -7,6 +7,7 @@
  */
 import { ok, fail, readJson, rateLimit, clientIp } from "@/lib/server/http";
 import { createSession } from "@/lib/server/sessions";
+import { currentHost } from "@/lib/server/host-auth";
 
 export async function POST(req: Request): Promise<Response> {
   if (!rateLimit(`create:${clientIp(req)}`, 20, 60_000)) return fail(429, "rate_limited");
@@ -15,8 +16,18 @@ export async function POST(req: Request): Promise<Response> {
   const sourceLocale =
     typeof body?.sourceLocale === "string" ? body.sourceLocale.slice(0, 8) : "no";
 
+  // Best-effort owner provenance: if (and only if) an allow-listed Sunday
+  // Account host is signed in, stamp the session so it shows in their
+  // dashboard. NEVER blocks anonymous create — any failure leaves owner null.
+  let hostUserId: string | null = null;
   try {
-    const session = await createSession({ title, sourceLocale });
+    hostUserId = (await currentHost())?.id ?? null;
+  } catch {
+    hostUserId = null;
+  }
+
+  try {
+    const session = await createSession({ title, sourceLocale, hostUserId });
     return ok(session, { status: 201 });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
