@@ -86,7 +86,7 @@ export default function Operator() {
         <header style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
           <div>
             <div className="kicker">
-              <span className="live-dot" /> Operatør · sesjon aktiv
+              <span className="live-dot" aria-hidden="true" /> Operatør · sesjon aktiv
             </div>
             <h1 style={{ fontSize: 28, marginTop: 6 }}>Oversettelse</h1>
           </div>
@@ -96,11 +96,11 @@ export default function Operator() {
         </header>
 
         {/* Listener join — the big screen */}
-        <section className="card" style={{ textAlign: "center" }}>
+        <section className="card" style={{ textAlign: "center" }} aria-label="PIN-kode og QR for lyttere">
           <div className="kicker">Lyttere skanner her</div>
-          <div className="pin" style={{ margin: "8px 0 16px" }}>{pin}</div>
+          <div className="pin" style={{ margin: "8px 0 16px" }} aria-label={`PIN-kode ${pin.split("").join(" ")}`}>{pin}</div>
           <div style={{ display: "flex", justifyContent: "center" }}>
-            <Qr value={listenUrl} size={240} />
+            <Qr value={listenUrl} size={240} alt="QR-kode lyttere skanner for å bli med" />
           </div>
           <p className="muted" style={{ marginBottom: 0 }}>
             translate.sundaysuite.app → tast inn <strong>{pin}</strong>
@@ -108,7 +108,7 @@ export default function Operator() {
         </section>
 
         {/* Channels */}
-        <section className="card stack">
+        <section className="card stack" aria-label="Kanaler">
           <div className="kicker">Kanaler</div>
           {channels.length === 0 && (
             <p className="muted" style={{ margin: 0 }}>
@@ -131,7 +131,7 @@ export default function Operator() {
               <span className="muted" style={{ fontSize: 14 }}>
                 {c.isLive ? (
                   <>
-                    <span className="live-dot" /> sender
+                    <span className="live-dot" aria-hidden="true" /> sender
                   </>
                 ) : (
                   "venter på tilkobling"
@@ -141,7 +141,12 @@ export default function Operator() {
           ))}
 
           <div style={{ display: "flex", gap: 10, marginTop: 8 }}>
-            <select className="select" value={adding} onChange={(e) => setAdding(e.target.value)}>
+            <select
+              className="select"
+              value={adding}
+              onChange={(e) => setAdding(e.target.value)}
+              aria-label="Legg til språk"
+            >
               <option value="">Legg til språk…</option>
               {LANGS.filter((l) => !taken.has(l.code)).map((l) => (
                 <option key={l.code} value={l.code}>
@@ -149,7 +154,12 @@ export default function Operator() {
                 </option>
               ))}
             </select>
-            <button className="btn btn-primary" onClick={addLanguage} disabled={!adding || busy}>
+            <button
+              className="btn btn-primary"
+              onClick={addLanguage}
+              disabled={!adding || busy}
+              aria-busy={busy}
+            >
               Legg til
             </button>
           </div>
@@ -164,12 +174,16 @@ export default function Operator() {
           </p>
           <div style={{ display: "flex", gap: 24, flexWrap: "wrap" }}>
             <div style={{ textAlign: "center" }}>
-              <Qr value={sourceUrl} size={150} />
-              <div style={{ fontWeight: 700, marginTop: 8 }}>🎚️ Lydkort / kilde</div>
+              <Qr value={sourceUrl} size={150} alt="QR-kode for lydkort / kilde-konsoll" />
+              <div style={{ fontWeight: 700, marginTop: 8 }}>
+                <span aria-hidden="true">🎚️ </span>Lydkort / kilde
+              </div>
             </div>
             <div style={{ textAlign: "center" }}>
-              <Qr value={interpUrl} size={150} />
-              <div style={{ fontWeight: 700, marginTop: 8 }}>🎙️ Tolk</div>
+              <Qr value={interpUrl} size={150} alt="QR-kode for tolk-konsoll" />
+              <div style={{ fontWeight: 700, marginTop: 8 }}>
+                <span aria-hidden="true">🎙️ </span>Tolk
+              </div>
             </div>
           </div>
         </section>
