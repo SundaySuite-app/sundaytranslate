@@ -1,14 +1,16 @@
 "use client";
 
 /** A simple horizontal level bar (0..1) so a publisher can see audio flowing. */
-export function VuMeter({ level }: { level: number }) {
+export function VuMeter({ level, label = "Mikrofonnivå" }: { level: number; label?: string }) {
   const pct = Math.round(Math.min(1, Math.max(0, level)) * 100);
   return (
     <div
       role="meter"
+      aria-label={label}
       aria-valuenow={pct}
       aria-valuemin={0}
       aria-valuemax={100}
+      aria-valuetext={`${pct} prosent`}
       style={{
         height: 14,
         borderRadius: 8,

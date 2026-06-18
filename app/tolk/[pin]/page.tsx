@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useParams } from "next/navigation";
 import { VuMeter } from "@/components/VuMeter";
+import { InlineError } from "@/components/InlineError";
 import { useHashSecret, useVuMeter } from "@/lib/client/hooks";
 import { useStaffSession } from "@/lib/client/useStaffSession";
 import { usePublisher } from "@/lib/client/usePublisher";
@@ -31,14 +32,27 @@ export default function Interpreter() {
   }
 
   return (
-    <main className="center-screen">
+    <main className="center-screen" aria-labelledby="tolk-title">
       <div className="wrap" style={{ maxWidth: 520 }}>
-        <div className="card stack">
-          <div className="kicker">🎙️ Tolk</div>
-          <h1 style={{ fontSize: 24 }}>{session?.title || "Tolking"}</h1>
+        <div className="card stack" role="region" aria-label="Tolk-konsoll">
+          <div className="kicker">
+            <span aria-hidden="true">🎙️ </span>Tolk
+          </div>
+          <h1 id="tolk-title" style={{ fontSize: 24 }}>{session?.title || "Tolking"}</h1>
           <p className="muted" style={{ marginTop: 0 }}>
             Bruk hodetelefoner og les oversettelsen høyt. Lytterne som velger ditt
             språk hører deg direkte.
+          </p>
+
+          {/* Live status, announced to screen readers as it changes. */}
+          <p role="status" aria-live="polite" className="visually-hidden">
+            {pub.state === "connecting"
+              ? "Kobler til…"
+              : live
+                ? `Du sender nå tolking på ${langName(lang)}.`
+                : pub.state === "error"
+                  ? "Tilkobling feilet."
+                  : "Klar til å starte tolking."}
           </p>
 
           {!live ? (
@@ -52,6 +66,7 @@ export default function Interpreter() {
                   className="select"
                   value={lang}
                   onChange={(e) => setLang(e.target.value)}
+                  aria-label="Velg språk du tolker til"
                 >
                   <option value="">Velg språk…</option>
                   {LANGS.filter((l) => l.code !== session?.sourceLocale).map((l) => (
@@ -65,6 +80,7 @@ export default function Interpreter() {
                 className="btn btn-primary btn-lg btn-block"
                 onClick={start}
                 disabled={!lang || pub.state === "connecting"}
+                aria-busy={pub.state === "connecting"}
               >
                 {pub.state === "connecting" ? "Kobler til…" : "Start tolking"}
               </button>
@@ -73,22 +89,22 @@ export default function Interpreter() {
             <>
               <div style={{ textAlign: "center", padding: "8px 0" }}>
                 <div className="kicker">
-                  <span className="live-dot" /> Du sender på
+                  <span className="live-dot" aria-hidden="true" /> Du sender på
                 </div>
                 <div style={{ fontSize: 28, fontWeight: 800, marginTop: 6 }}>
                   {langName(lang)}
                 </div>
               </div>
-              {pub.stream && <VuMeter level={level} />}
+              {pub.stream && <VuMeter level={level} label="Ditt mikrofonnivå" />}
               <button className="btn btn-block" onClick={pub.stop}>
                 Stopp tolking
               </button>
             </>
           )}
           {pub.state === "error" && (
-            <p style={{ color: "var(--danger)", margin: 0 }}>
+            <InlineError>
               Tilkobling feilet. Sjekk mikrofon og nett, og prøv igjen.
-            </p>
+            </InlineError>
           )}
         </div>
       </div>

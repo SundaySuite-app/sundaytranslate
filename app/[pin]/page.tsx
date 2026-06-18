@@ -79,7 +79,7 @@ export default function Listener() {
         <header style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
           <div>
             <div className="kicker">
-              <span className="live-dot" /> Sunday<span style={{ color: "var(--accent)" }}>Translate</span>
+              <span className="live-dot" aria-hidden="true" /> Sunday<span style={{ color: "var(--accent)" }}>Translate</span>
             </div>
             {session.title && <div style={{ fontWeight: 700, marginTop: 4 }}>{session.title}</div>}
           </div>
@@ -99,9 +99,16 @@ export default function Listener() {
         </header>
 
         {cap.active && (
-          <section className="card" style={{ padding: "14px 16px" }} dir={isRtl(capLocale) ? "rtl" : "ltr"}>
+          <section
+            className="card"
+            style={{ padding: "14px 16px" }}
+            dir={isRtl(capLocale) ? "rtl" : "ltr"}
+            aria-label={`${t.uiLanguage}: ${langName(capLocale)}`}
+          >
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
-              <span className="muted" style={{ fontSize: 13 }}>💬 {langName(capLocale)}</span>
+              <span className="muted" style={{ fontSize: 13 }}>
+                <span aria-hidden="true">💬 </span>{langName(capLocale)}
+              </span>
               <select
                 className="select"
                 aria-label={t.uiLanguage}
@@ -123,14 +130,20 @@ export default function Listener() {
                 type="checkbox"
                 checked={aiVoice}
                 onChange={(e) => setAiVoice(e.target.checked)}
+                aria-label="Les undertekster høyt med AI-stemme (beta)"
                 style={{ width: 18, height: 18 }}
               />
               <span style={{ fontSize: 14 }}>
-                🔊 AI <span className="muted">· beta</span>
+                <span aria-hidden="true">🔊 </span>AI <span className="muted">· beta</span>
               </span>
             </label>
             {cap.text && (
-              <p className="captions" style={{ marginTop: 12, marginBottom: 0 }}>
+              <p
+                className="captions"
+                style={{ marginTop: 12, marginBottom: 0 }}
+                aria-live="polite"
+                aria-atomic="true"
+              >
                 {cap.text}
               </p>
             )}
@@ -138,26 +151,44 @@ export default function Listener() {
         )}
 
         <div>
-          <h1 style={{ fontSize: 26 }}>{t.choose}</h1>
+          <h1 id="choose-heading" style={{ fontSize: 26 }}>{t.choose}</h1>
           <p className="muted" style={{ margin: "6px 0 0" }}>{t.chooseSub}</p>
         </div>
 
-        <div className="stack" style={{ gap: 12 }}>
+        {/* Playback status, announced as it changes. */}
+        <p role="status" aria-live="polite" className="visually-hidden">
+          {sub.activeId
+            ? sub.state === "connecting"
+              ? t.connecting
+              : t.playing
+            : ""}
+        </p>
+
+        <div className="stack" style={{ gap: 12 }} role="group" aria-labelledby="choose-heading">
           {sorted.length === 0 && <p className="muted">{t.waiting}</p>}
           {sorted.map((c) => {
             const l = label(c);
             const selected = sub.activeId === c.id;
             const ready = c.isLive && !!c.sfuSessionId;
+            const stateText = selected
+              ? sub.state === "connecting"
+                ? t.connecting
+                : t.playing
+              : ready
+                ? ""
+                : t.waiting;
             return (
               <button
                 key={c.id}
                 className="channel"
                 data-selected={selected}
                 disabled={!ready}
+                aria-pressed={selected}
+                aria-label={`${l.main}${l.sub ? ` — ${l.sub}` : ""}${stateText ? `. ${stateText}` : ""}`}
                 onClick={() => (selected ? sub.stop() : sub.listen(c))}
                 style={{ opacity: ready ? 1 : 0.5 }}
               >
-                <span className="flag">{l.icon}</span>
+                <span className="flag" aria-hidden="true">{l.icon}</span>
                 <span style={{ flex: 1 }}>
                   <span style={{ display: "block" }}>{l.main}</span>
                   {l.sub && (
@@ -166,7 +197,7 @@ export default function Listener() {
                     </span>
                   )}
                 </span>
-                <span className="muted" style={{ fontSize: 14 }}>
+                <span className="muted" style={{ fontSize: 14 }} aria-hidden="true">
                   {selected
                     ? sub.state === "connecting"
                       ? t.connecting
@@ -187,9 +218,9 @@ export default function Listener() {
         )}
 
         <footer className="muted" style={{ fontSize: 13, textAlign: "center", lineHeight: 1.6 }}>
-          🎧 {t.earbuds}
+          <span aria-hidden="true">🎧 </span>{t.earbuds}
           <br />
-          💡 {t.keepAwake} · 🔒 {t.noRecording}
+          <span aria-hidden="true">💡 </span>{t.keepAwake} · <span aria-hidden="true">🔒 </span>{t.noRecording}
         </footer>
       </div>
 
