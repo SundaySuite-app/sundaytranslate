@@ -31,6 +31,14 @@ export async function translateLine(
     `translation — natural, faithful, reverent where appropriate. No notes, no quotes, ` +
     `no transliteration. If the input is empty or just noise, output nothing.`;
 
+  // Bound the whole call — including the body read — with one AbortController.
+  // This is the live-caption path (one call per target locale, per 5s chunk); an
+  // Anthropic response that stalls after headers arrive would otherwise hang the
+  // ASR request until the platform timeout (the suite-wide timedFetch gotcha).
+  // The timer clears only after res.json() resolves, so a stalled body is aborted
+  // too; the abort surfaces here as the existing null (caption skipped) degrade.
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 8_000);
   try {
     const res = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
@@ -45,6 +53,7 @@ export async function translateLine(
         system,
         messages: [{ role: "user", content: text }],
       }),
+      signal: controller.signal,
     });
     if (!res.ok) return null;
     const data = (await res.json()) as AnthropicResponse;
@@ -52,5 +61,7 @@ export async function translateLine(
     return typeof out === "string" ? out.trim() : null;
   } catch {
     return null;
+  } finally {
+    clearTimeout(timeout);
   }
 }
