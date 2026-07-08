@@ -59,6 +59,9 @@ export function useSubscriber(
   const graceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const watchdogTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const connectRef = useRef<(gen: number) => void>(() => {});
+  // True while the user paused via lock-screen/headset controls — the
+  // visibility-resume must not override a deliberate pause.
+  const userPausedRef = useRef(false);
 
   const clearTimers = useCallback(() => {
     for (const t of [retryTimer, graceTimer, watchdogTimer]) {
@@ -79,12 +82,31 @@ export function useSubscriber(
     clearTimers();
     attemptRef.current = 0;
     channelRef.current = null;
+    userPausedRef.current = false;
     teardownHandle();
     setActiveId(null);
     setState("idle");
     setTransport(null);
     if (audioRef.current) audioRef.current.srcObject = null;
+    if ("mediaSession" in navigator) {
+      navigator.mediaSession.metadata = null;
+      navigator.mediaSession.playbackState = "none";
+    }
   }, [audioRef, clearTimers, teardownHandle]);
+
+  // iOS/Android can suspend the tab (screen lock without wake lock, app
+  // switch); when it comes back, kick the paused element — unless the user
+  // paused deliberately from the lock screen.
+  useEffect(() => {
+    const onVis = () => {
+      if (document.visibilityState !== "visible") return;
+      if (userPausedRef.current) return;
+      const el = audioRef.current;
+      if (handleRef.current && el && el.paused) el.play().catch(() => {});
+    };
+    document.addEventListener("visibilitychange", onVis);
+    return () => document.removeEventListener("visibilitychange", onVis);
+  }, [audioRef]);
 
   // Tear down the peer connection + audio context when the listener unmounts
   // (session ended, navigated away) — otherwise the PC keeps pulling audio.
@@ -184,6 +206,23 @@ export function useSubscriber(
             title: channel.label || "SundayTranslate",
             artist: "SundayTranslate",
           });
+          navigator.mediaSession.playbackState = "playing";
+          // Lock-screen/headset controls: honour pause, resume at the live
+          // edge on play (it's a live stream — play() rejoins "now").
+          try {
+            navigator.mediaSession.setActionHandler("play", () => {
+              userPausedRef.current = false;
+              el?.play().catch(() => {});
+              navigator.mediaSession.playbackState = "playing";
+            });
+            navigator.mediaSession.setActionHandler("pause", () => {
+              userPausedRef.current = true;
+              el?.pause();
+              navigator.mediaSession.playbackState = "paused";
+            });
+          } catch {
+            /* older browsers without action-handler support */
+          }
         }
       };
 
@@ -263,6 +302,7 @@ export function useSubscriber(
       clearTimers();
       attemptRef.current = 0;
       channelRef.current = channel;
+      userPausedRef.current = false;
       teardownHandle();
       setActiveId(channel.id);
       setTransport(null);

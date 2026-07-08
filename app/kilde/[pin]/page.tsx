@@ -48,7 +48,7 @@ export default function Source() {
         .map((c) => c.targetLocale as string),
     ),
   );
-  useCaptioner({
+  const captioner = useCaptioner({
     sessionId: id,
     secret,
     stream: pub.stream,
@@ -195,6 +195,12 @@ export default function Source() {
                     </span>
                   </span>
                 </label>
+              )}
+              {captions && captioner.failing && (
+                <InlineError>
+                  AI-undertekster ser ikke ut til å virke — sjekk at Workers AI
+                  og API-nøkkelen er satt opp. Lyden går som normalt.
+                </InlineError>
               )}
               {pub.state === "reconnecting" && (
                 <InlineError>

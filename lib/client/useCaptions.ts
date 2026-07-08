@@ -21,10 +21,28 @@ interface Captions {
  * broadcasts (newer-seq wins) and seeds from the late-join snapshot. Works with
  * or without an audio channel selected — deaf/HoH listeners can read along.
  * `active` lets the UI hide the subtitle panel until captions are actually on. */
+/** Hide the caption panel after this long without any caption event —
+ * otherwise a 10-second captions experiment leaves the panel up all service. */
+const STALE_MS = 90_000;
+
 export function useCaptions(sessionId: string | null, locale: string): Captions {
   const [lines, setLines] = useState<string[]>([]);
   const [active, setActive] = useState(false);
   const seqRef = useRef(0);
+  const staleTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Mark captions live and (re)arm the staleness decay.
+  const bumpActive = () => {
+    setActive(true);
+    if (staleTimer.current) clearTimeout(staleTimer.current);
+    staleTimer.current = setTimeout(() => setActive(false), STALE_MS);
+  };
+  useEffect(() => {
+    const timer = staleTimer;
+    return () => {
+      if (timer.current) clearTimeout(timer.current);
+    };
+  }, []);
 
   // Reset the lines when the caption language changes (but keep `active`).
   useEffect(() => {
@@ -35,7 +53,7 @@ export function useCaptions(sessionId: string | null, locale: string): Captions 
 
   useChannel(sessionId ? rtChannels.session(sessionId) : null, (event, payload) => {
     if (event !== events.caption) return;
-    setActive(true);
+    bumpActive();
     if (payload.locale !== locale) return;
     const seq = Number(payload.seq) || 0;
     if (seq <= seqRef.current) return;
@@ -52,7 +70,7 @@ export function useCaptions(sessionId: string | null, locale: string): Captions 
       .then((r) => r.json())
       .then((d: { captions?: Array<{ locale: string; seq: number; text: string }> }) => {
         if (!alive) return;
-        if (d.captions && d.captions.length > 0) setActive(true);
+        if (d.captions && d.captions.length > 0) bumpActive();
         const c = d.captions?.find((x) => x.locale === locale);
         if (c && c.seq > seqRef.current) {
           seqRef.current = c.seq;

@@ -7,6 +7,7 @@ import { InlineError } from "@/components/InlineError";
 import { useHashSecret, useVuMeter, useWakeLock } from "@/lib/client/hooks";
 import { useStaffSession } from "@/lib/client/useStaffSession";
 import { usePublisher } from "@/lib/client/usePublisher";
+import { useLiveChannels } from "@/lib/client/useLiveChannels";
 import { LANGS, langName } from "@/lib/locales";
 
 /** Human-friendly Norwegian text for the publisher's error codes. */
@@ -31,6 +32,13 @@ export default function Interpreter() {
   const level = useVuMeter(pub.stream);
   const [lang, setLang] = useState("");
   const [muted, setMuted] = useState(false);
+
+  // Which human channels already have a live interpreter — two interpreters on
+  // the same language silently knock each other out, so warn before starting.
+  const { channels } = useLiveChannels(id);
+  const liveLangs = new Set(
+    channels.filter((c) => c.kind === "human" && c.isLive && c.targetLocale).map((c) => c.targetLocale),
+  );
 
   // Remember the language across a mid-service page reload.
   useEffect(() => {
@@ -117,10 +125,17 @@ export default function Interpreter() {
                   {LANGS.filter((l) => l.code !== session?.sourceLocale).map((l) => (
                     <option key={l.code} value={l.code}>
                       {l.flag} {l.name}
+                      {liveLangs.has(l.code) ? " — i bruk" : ""}
                     </option>
                   ))}
                 </select>
               </div>
+              {lang && liveLangs.has(lang) && (
+                <InlineError>
+                  En annen tolk sender allerede på {langName(lang)}. Starter du,
+                  tar du over kanalen.
+                </InlineError>
+              )}
               <button
                 className="btn btn-primary btn-lg btn-block"
                 onClick={start}

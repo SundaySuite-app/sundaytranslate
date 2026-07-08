@@ -78,6 +78,17 @@ export default function Listener() {
     [channels],
   );
 
+  // The captioner only produces the source language + the channel targets —
+  // offering every language in the picker gives dead, empty panels. (No manual
+  // memo: the React Compiler handles it, and the work is trivial anyway.)
+  const capSet = new Set<string>();
+  if (session?.sourceLocale) capSet.add(session.sourceLocale);
+  channels.forEach((c) => {
+    if (c.targetLocale) capSet.add(c.targetLocale);
+  });
+  if (capLocale) capSet.add(capLocale);
+  const capLocales = LANGS.filter((l) => capSet.has(l.code));
+
   if (loading) return <Center>…</Center>;
   if (error || !id || !session) return <Center>{strings(ui).notFound}</Center>;
 
@@ -149,11 +160,11 @@ export default function Listener() {
                 <select
                   className="select"
                   aria-label={t.uiLanguage}
-                  value={LANGS.some((l) => l.code === capLocale) ? capLocale : "en"}
+                  value={capLocales.some((l) => l.code === capLocale) ? capLocale : (capLocales[0]?.code ?? "en")}
                   onChange={(e) => setCapLang(e.target.value)}
                   style={{ width: "auto", minHeight: 36, padding: "6px 10px" }}
                 >
-                  {LANGS.map((l) => (
+                  {capLocales.map((l) => (
                     <option key={l.code} value={l.code}>
                       {l.name}
                     </option>
