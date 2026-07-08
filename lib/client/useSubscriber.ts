@@ -166,6 +166,19 @@ export function useSubscriber(
             }, DISCONNECT_GRACE_MS);
           }
         });
+        // ICE can complete before the subscribe HTTP round-trip returns, so the
+        // "connected" (or "failed") event may have fired before the listener
+        // above attached — catch up on the current state or the UI shows
+        // "connecting" forever while audio is already flowing.
+        const s0 = handle.pc.connectionState;
+        if (s0 === "connected") {
+          attemptRef.current = 0;
+          clearTimers();
+          setState("playing");
+          el?.play().catch(() => {});
+        } else if (s0 === "failed" || s0 === "closed") {
+          scheduleRetry(gen);
+        }
         if ("mediaSession" in navigator) {
           navigator.mediaSession.metadata = new MediaMetadata({
             title: channel.label || "SundayTranslate",

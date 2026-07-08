@@ -101,7 +101,10 @@ export interface PublishHandle {
   trackName: string;
   pc: RTCPeerConnection;
   onState: (cb: (s: RTCPeerConnectionState) => void) => void;
+  /** Full teardown: stops the underlying track too. */
   stop: () => void;
+  /** Close the transport but keep the caller's track alive (for re-publish). */
+  release: () => void;
 }
 
 /** Publish one audio track. `trackName` identifies it to subscribers.
@@ -145,6 +148,7 @@ export async function publishTrack(
       audio.stop();
       pc.close();
     },
+    release: () => pc.close(),
   };
 }
 
@@ -152,6 +156,7 @@ export interface SubscribeHandle {
   pc: RTCPeerConnection;
   onState: (cb: (s: RTCPeerConnectionState) => void) => void;
   stop: () => void;
+  release: () => void;
 }
 
 /** Subscribe to a published track. `onStream` fires with the inbound audio.
@@ -189,6 +194,7 @@ export async function subscribeTrack(
     pc,
     onState: (cb) => pc.addEventListener("connectionstatechange", () => cb(pc.connectionState)),
     stop: () => pc.close(),
+    release: () => pc.close(),
   };
 }
 
@@ -211,7 +217,11 @@ export async function subscribeTrack(
 export interface MediaHandle {
   pc: RTCPeerConnection;
   onState: (cb: (s: RTCPeerConnectionState) => void) => void;
+  /** Full teardown: stops the underlying track too (where the handle owns one). */
   stop: () => void;
+  /** Close the transport (incl. any WHIP/WHEP resource DELETE) but keep the
+   * caller's track alive — the re-publish/re-subscribe teardown. */
+  release: () => void;
 }
 
 const stripSlash = (s: string) => s.replace(/\/+$/, "");
@@ -284,15 +294,22 @@ export async function publishTrackWhip(
   const resource = location ? resolveResource(endpoint, location) : null;
   await pc.setRemoteDescription({ type: "answer", sdp: answer });
 
+  const release = () => {
+    pc.close();
+    // Free the mediamtx path immediately — without the DELETE the relay keeps
+    // the old publisher registered and refuses a re-publish until its own
+    // ICE timeout.
+    if (resource) void fetch(resource, { method: "DELETE" }).catch(() => {});
+  };
   return {
     pc,
     onState: (cb) =>
       pc.addEventListener("connectionstatechange", () => cb(pc.connectionState)),
     stop: () => {
       audio.stop();
-      pc.close();
-      if (resource) void fetch(resource, { method: "DELETE" }).catch(() => {});
+      release();
     },
+    release,
   };
 }
 
@@ -324,13 +341,15 @@ export async function subscribeTrackWhep(
   const resource = location ? resolveResource(endpoint, location) : null;
   await pc.setRemoteDescription({ type: "answer", sdp: answer });
 
+  const release = () => {
+    pc.close();
+    if (resource) void fetch(resource, { method: "DELETE" }).catch(() => {});
+  };
   return {
     pc,
     onState: (cb) =>
       pc.addEventListener("connectionstatechange", () => cb(pc.connectionState)),
-    stop: () => {
-      pc.close();
-      if (resource) void fetch(resource, { method: "DELETE" }).catch(() => {});
-    },
+    stop: release,
+    release,
   };
 }

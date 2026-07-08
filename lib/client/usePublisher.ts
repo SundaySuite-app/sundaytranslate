@@ -102,12 +102,13 @@ export function usePublisher(
     micRef.current = null;
   }, []);
 
-  /** Close dead peer connections but KEEP the mic hot for a re-publish.
-   * (handle.stop() would stop the mic track itself.) */
+  /** Close dead transports but KEEP the mic hot for a re-publish.
+   * (handle.stop() would stop the mic track itself; release() also sends the
+   * WHIP DELETE so the relay frees the path before we re-publish to it.) */
   const dropConnections = useCallback(() => {
-    handleRef.current?.pc.close();
+    handleRef.current?.release();
     handleRef.current = null;
-    localHandleRef.current?.pc.close();
+    localHandleRef.current?.release();
     localHandleRef.current = null;
   }, []);
 
@@ -226,17 +227,29 @@ export function usePublisher(
     [sessionId, secret, localRelayUrl],
   );
 
-  /** Best-effort dual-publish to the local relay; never blocks the cloud path. */
+  /** Best-effort dual-publish to the local relay; never blocks the cloud path.
+   * `gen` guards the slow WHIP round-trip: if the pipeline was torn down while
+   * we awaited, the fresh relay session is released instead of leaking. */
   const publishLocal = useCallback(
-    async (mic: MediaStream): Promise<{ localStream?: string; localLive: boolean } | null> => {
+    async (
+      mic: MediaStream,
+      gen: number,
+    ): Promise<{ localStream?: string; localLive: boolean } | null> => {
       if (!localRelayUrl || !sessionId) return null;
       const path = `${sessionId}_${trackNameRef.current}`.replace(/[^a-zA-Z0-9_-]/g, "_");
       try {
-        localHandleRef.current = await publishTrackWhip(
+        const handle = await publishTrackWhip(
           mic,
           whipUrl(localRelayUrl, path),
           secret ?? undefined,
         );
+        if (gen !== genRef.current) {
+          handle.release();
+          return null;
+        }
+        // Defensive: never overwrite (and thereby leak) a still-open handle.
+        localHandleRef.current?.release();
+        localHandleRef.current = handle;
         return { localStream: path, localLive: true };
       } catch {
         return { localLive: false };
@@ -262,11 +275,14 @@ export function usePublisher(
       try {
         const handle = await publishTrack(mic, trackNameRef.current, sessionId);
         if (gen !== genRef.current) {
-          handle.pc.close();
+          handle.release();
           return;
         }
         wireCloud(handle, gen);
-        const local = await publishLocal(mic);
+        const local = await publishLocal(mic, gen);
+        // The awaits above can outlive a teardown (stop/unmount/onended, which
+        // already sent live:false) — never let a stale pipeline write live:true.
+        if (gen !== genRef.current) return;
         const res = await register(handle, local);
         if (!res.ok) throw new Error(`register ${res.status}`);
         if (gen !== genRef.current) return;
@@ -348,14 +364,18 @@ export function usePublisher(
         trackNameRef.current = `${spec.kind}-${spec.targetLocale ?? "orig"}`;
         const handle = await publishTrack(mic, trackNameRef.current, sessionId);
         if (gen !== genRef.current) {
-          handle.pc.close();
+          handle.release();
           return;
         }
         wireCloud(handle, gen);
 
         // 3b. Dual-publish to the local relay (best-effort) so on-wifi listeners
         // can pull it locally. A relay failure never blocks the cloud path.
-        const local = await publishLocal(mic);
+        const local = await publishLocal(mic, gen);
+
+        // The awaits above can outlive a teardown (stop/unmount/onended, which
+        // already sent live:false) — never let a stale pipeline write live:true.
+        if (gen !== genRef.current) return;
 
         // 4. Register coordinates so listeners can pull it (cloud + local).
         const res = await register(handle, local);
