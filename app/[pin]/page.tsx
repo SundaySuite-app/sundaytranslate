@@ -7,7 +7,9 @@ import { useLiveChannels } from "@/lib/client/useLiveChannels";
 import { useSubscriber } from "@/lib/client/useSubscriber";
 import { useCaptions } from "@/lib/client/useCaptions";
 import { useTtsVoice } from "@/lib/client/useTtsVoice";
+import { usePresenceTrack } from "@/lib/client/usePresence";
 import { useWakeLock } from "@/lib/client/hooks";
+import { channels as rtChannels } from "@/lib/realtime";
 import { LANGS, UI_LOCALES, isRtl, langName } from "@/lib/locales";
 import { strings } from "@/lib/locale";
 import type { ChannelView } from "@/lib/types";
@@ -47,10 +49,26 @@ export default function Listener() {
   const t = strings(ui);
   const rtl = isRtl(ui);
 
+  // Anonymous head-count for the operator's console (best-effort presence).
+  usePresenceTrack(id ? rtChannels.presence(id) : null, status !== "ended");
+
   // Phase 2: live subtitles, language-independent of the audio channel.
   const [capLang, setCapLang] = useState("");
   const capLocale = capLang || ui;
   const cap = useCaptions(id, capLocale);
+
+  // HoH read-along: adjustable subtitle size, remembered on this phone.
+  const [capScale, setCapScale] = useState(1);
+  useEffect(() => {
+    const saved = Number(localStorage.getItem("st-cap-scale"));
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- one-time client-only restore after hydration
+    if (saved === 1.4 || saved === 1.8) setCapScale(saved);
+  }, []);
+  function cycleCapScale() {
+    const next = capScale >= 1.8 ? 1 : capScale >= 1.4 ? 1.8 : 1.4;
+    setCapScale(next);
+    localStorage.setItem("st-cap-scale", String(next));
+  }
 
   // Phase 3: optional AI voice — speak each caption line on this device.
   useTtsVoice(cap.text, capLocale, aiVoice, id);
@@ -118,19 +136,30 @@ export default function Listener() {
               <span className="muted" style={{ fontSize: 13 }}>
                 <span aria-hidden="true">💬 </span>{langName(capLocale)}
               </span>
-              <select
-                className="select"
-                aria-label={t.uiLanguage}
-                value={LANGS.some((l) => l.code === capLocale) ? capLocale : "en"}
-                onChange={(e) => setCapLang(e.target.value)}
-                style={{ width: "auto", minHeight: 36, padding: "6px 10px" }}
-              >
-                {LANGS.map((l) => (
-                  <option key={l.code} value={l.code}>
-                    {l.name}
-                  </option>
-                ))}
-              </select>
+              <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <button
+                  className="btn btn-ghost"
+                  onClick={cycleCapScale}
+                  aria-label={t.textSize}
+                  title={t.textSize}
+                  style={{ minHeight: 36, padding: "6px 10px", fontSize: 14 }}
+                >
+                  <span style={{ fontSize: 12 }}>A</span>A
+                </button>
+                <select
+                  className="select"
+                  aria-label={t.uiLanguage}
+                  value={LANGS.some((l) => l.code === capLocale) ? capLocale : "en"}
+                  onChange={(e) => setCapLang(e.target.value)}
+                  style={{ width: "auto", minHeight: 36, padding: "6px 10px" }}
+                >
+                  {LANGS.map((l) => (
+                    <option key={l.code} value={l.code}>
+                      {l.name}
+                    </option>
+                  ))}
+                </select>
+              </span>
             </div>
             <label
               style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 10, cursor: "pointer" }}
@@ -146,15 +175,17 @@ export default function Listener() {
                 <span aria-hidden="true">🔊 </span>AI <span className="muted">· beta</span>
               </span>
             </label>
-            {cap.text && (
-              <p
-                className="captions"
-                style={{ marginTop: 12, marginBottom: 0 }}
-                aria-live="polite"
-                aria-atomic="true"
-              >
-                {cap.text}
-              </p>
+            {cap.lines.length > 0 && (
+              <div style={{ marginTop: 12, fontSize: `${capScale}em` }}>
+                {cap.lines.length > 1 && (
+                  <p className="captions muted" style={{ margin: "0 0 6px", opacity: 0.6 }}>
+                    {cap.lines[cap.lines.length - 2]}
+                  </p>
+                )}
+                <p className="captions" style={{ margin: 0 }} aria-live="polite" aria-atomic="true">
+                  {cap.text}
+                </p>
+              </div>
             )}
           </section>
         )}

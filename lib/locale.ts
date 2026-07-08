@@ -23,6 +23,7 @@ export interface Strings {
   uiLanguage: string;
   connectionLost: string;
   retry: string;
+  textSize: string;
 }
 
 const en: Strings = {
@@ -44,6 +45,7 @@ const en: Strings = {
   uiLanguage: "Language",
   connectionLost: "Connection lost.",
   retry: "Try again",
+  textSize: "Text size",
 };
 
 const no: Strings = {
@@ -65,6 +67,7 @@ const no: Strings = {
   uiLanguage: "Språk",
   connectionLost: "Mistet forbindelsen.",
   retry: "Prøv igjen",
+  textSize: "Tekststørrelse",
 };
 
 const nn: Strings = {
@@ -78,6 +81,7 @@ const nn: Strings = {
   keepAwake: "Hald skjermen på medan du lyttar.",
   notFound: "Fann ingen aktiv sesjon for den PIN-en.",
   connectionLost: "Mista sambandet.",
+  textSize: "Tekststorleik",
 };
 
 const pl: Strings = {
@@ -99,6 +103,7 @@ const pl: Strings = {
   uiLanguage: "Język",
   connectionLost: "Utracono połączenie.",
   retry: "Spróbuj ponownie",
+  textSize: "Rozmiar tekstu",
 };
 
 const uk: Strings = {
@@ -120,6 +125,7 @@ const uk: Strings = {
   uiLanguage: "Мова",
   connectionLost: "З'єднання втрачено.",
   retry: "Спробувати ще раз",
+  textSize: "Розмір тексту",
 };
 
 const ar: Strings = {
@@ -141,6 +147,7 @@ const ar: Strings = {
   uiLanguage: "اللغة",
   connectionLost: "انقطع الاتصال.",
   retry: "حاول مرة أخرى",
+  textSize: "حجم النص",
 };
 
 const so: Strings = {
@@ -162,6 +169,7 @@ const so: Strings = {
   uiLanguage: "Luqad",
   connectionLost: "Xiriirku wuu go'ay.",
   retry: "Isku day mar kale",
+  textSize: "Cabbirka qoraalka",
 };
 
 const DICT: Record<UiLocale, Strings> = { en, no, nn, pl, uk, ar, so };

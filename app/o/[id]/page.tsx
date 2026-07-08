@@ -7,6 +7,8 @@ import { Qr } from "@/components/Qr";
 import { InlineError } from "@/components/InlineError";
 import { useHashSecret } from "@/lib/client/hooks";
 import { useLiveChannels } from "@/lib/client/useLiveChannels";
+import { usePresenceCount } from "@/lib/client/usePresence";
+import { channels as rtChannels } from "@/lib/realtime";
 import { LANGS, langName } from "@/lib/locales";
 
 export default function Operator() {
@@ -18,6 +20,10 @@ export default function Operator() {
   const [adding, setAdding] = useState("");
   const [busy, setBusy] = useState(false);
   const [channelError, setChannelError] = useState("");
+  // The staff QRs carry the write secret — keep them hidden until deliberately
+  // revealed, since this page often IS the projected big screen.
+  const [showStaff, setShowStaff] = useState(false);
+  const listeners = usePresenceCount(rtChannels.presence(id));
 
   const origin = typeof window !== "undefined" ? window.location.origin : "";
   const listenUrl = `${origin}/${pin}`;
@@ -131,6 +137,10 @@ export default function Operator() {
           <p className="muted" style={{ marginBottom: 0 }}>
             translate.sundaysuite.app → tast inn <strong>{pin}</strong>
           </p>
+          <p className="muted" style={{ marginTop: 12, marginBottom: 0, fontSize: 14 }}>
+            <span aria-hidden="true">👥 </span>
+            {listeners === 1 ? "1 lytter tilkoblet" : `${listeners} lyttere tilkoblet`}
+          </p>
         </section>
 
         {/* Channels */}
@@ -204,27 +214,44 @@ export default function Operator() {
           </div>
         </section>
 
-        {/* Staff links */}
+        {/* Staff links — hidden by default so the secret never hits the big screen. */}
         <section className="card stack">
           <div className="kicker">Til medarbeiderne</div>
-          <p className="muted" style={{ marginTop: 0 }}>
-            Del disse med lydteknikeren og tolkene. De inneholder en hemmelig
-            nøkkel — ikke vis dem på storskjermen.
-          </p>
-          <div style={{ display: "flex", gap: 24, flexWrap: "wrap" }}>
-            <div style={{ textAlign: "center" }}>
-              <Qr value={sourceUrl} size={150} alt="QR-kode for lydkort / kilde-konsoll" />
-              <div style={{ fontWeight: 700, marginTop: 8 }}>
-                <span aria-hidden="true">🎚️ </span>Lydkort / kilde
+          {!showStaff ? (
+            <>
+              <p className="muted" style={{ marginTop: 0 }}>
+                QR-kodene til lydteknikeren og tolkene inneholder en hemmelig
+                nøkkel og er derfor skjult. Ikke vis dem på storskjermen.
+              </p>
+              <button className="btn" onClick={() => setShowStaff(true)}>
+                Vis medarbeider-QR
+              </button>
+            </>
+          ) : (
+            <>
+              <p className="muted" style={{ marginTop: 0 }}>
+                Del disse med lydteknikeren og tolkene. De inneholder en hemmelig
+                nøkkel — ikke vis dem på storskjermen.
+              </p>
+              <div style={{ display: "flex", gap: 24, flexWrap: "wrap" }}>
+                <div style={{ textAlign: "center" }}>
+                  <Qr value={sourceUrl} size={150} alt="QR-kode for lydkort / kilde-konsoll" />
+                  <div style={{ fontWeight: 700, marginTop: 8 }}>
+                    <span aria-hidden="true">🎚️ </span>Lydkort / kilde
+                  </div>
+                </div>
+                <div style={{ textAlign: "center" }}>
+                  <Qr value={interpUrl} size={150} alt="QR-kode for tolk-konsoll" />
+                  <div style={{ fontWeight: 700, marginTop: 8 }}>
+                    <span aria-hidden="true">🎙️ </span>Tolk
+                  </div>
+                </div>
               </div>
-            </div>
-            <div style={{ textAlign: "center" }}>
-              <Qr value={interpUrl} size={150} alt="QR-kode for tolk-konsoll" />
-              <div style={{ fontWeight: 700, marginTop: 8 }}>
-                <span aria-hidden="true">🎙️ </span>Tolk
-              </div>
-            </div>
-          </div>
+              <button className="btn btn-ghost" onClick={() => setShowStaff(false)}>
+                Skjul QR-kodene
+              </button>
+            </>
+          )}
         </section>
       </div>
     </main>
