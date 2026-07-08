@@ -11,5 +11,5 @@ export async function GET(
   ctx: { params: Promise<{ id: string }> },
 ): Promise<Response> {
   const { id } = await ctx.params;
-  return ok({ captions: await getCaptions(id) });
+  return ok({ captions: await getCaptions(id) }, { headers: { "Cache-Control": "no-store" } });
 }

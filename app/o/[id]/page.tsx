@@ -23,7 +23,18 @@ export default function Operator() {
   // The staff QRs carry the write secret — keep them hidden until deliberately
   // revealed, since this page often IS the projected big screen.
   const [showStaff, setShowStaff] = useState(false);
+  const [copied, setCopied] = useState("");
   const listeners = usePresenceCount(rtChannels.presence(id));
+
+  async function copyLink(which: string, url: string) {
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopied(which);
+      setTimeout(() => setCopied(""), 2000);
+    } catch {
+      /* clipboard unavailable — the QR still works */
+    }
+  }
 
   const origin = typeof window !== "undefined" ? window.location.origin : "";
   const listenUrl = `${origin}/${pin}`;
@@ -239,12 +250,26 @@ export default function Operator() {
                   <div style={{ fontWeight: 700, marginTop: 8 }}>
                     <span aria-hidden="true">🎚️ </span>Lydkort / kilde
                   </div>
+                  <button
+                    className="btn btn-ghost"
+                    style={{ marginTop: 6, padding: "4px 10px", fontSize: 13 }}
+                    onClick={() => copyLink("kilde", sourceUrl)}
+                  >
+                    {copied === "kilde" ? "Kopiert!" : "Kopier lenke"}
+                  </button>
                 </div>
                 <div style={{ textAlign: "center" }}>
                   <Qr value={interpUrl} size={150} alt="QR-kode for tolk-konsoll" />
                   <div style={{ fontWeight: 700, marginTop: 8 }}>
                     <span aria-hidden="true">🎙️ </span>Tolk
                   </div>
+                  <button
+                    className="btn btn-ghost"
+                    style={{ marginTop: 6, padding: "4px 10px", fontSize: 13 }}
+                    onClick={() => copyLink("tolk", interpUrl)}
+                  >
+                    {copied === "tolk" ? "Kopiert!" : "Kopier lenke"}
+                  </button>
                 </div>
               </div>
               <button className="btn btn-ghost" onClick={() => setShowStaff(false)}>

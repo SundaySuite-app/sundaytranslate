@@ -2,20 +2,35 @@
 
 import { useCallback, useEffect, useRef } from "react";
 
+/** A tiny silent WAV — played inside the user's toggle gesture to unlock the
+ * Audio element on iOS (autoplay policy), so later async TTS play() succeeds. */
+const SILENCE =
+  "data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA";
+
 /** Phase 3 — client-side AI voice. When enabled, each new caption line is sent
  * to /api/tts and the returned audio is played in sequence. No server-side
  * WebRTC: the listener's own device speaks the translation. Best-effort and
- * experimental (latency + per-line chunking; limited language coverage). */
+ * experimental (latency + per-line chunking; limited language coverage).
+ * Call `prime()` inside the enable-toggle's gesture to unlock iOS autoplay. */
 export function useTtsVoice(
   text: string,
   locale: string,
   enabled: boolean,
   sessionId: string | null,
-): void {
+): { prime: () => void } {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const queueRef = useRef<string[]>([]);
   const playingRef = useRef(false);
   const lastRef = useRef("");
+
+  // Must run synchronously inside the user's tap on the AI-voice toggle: iOS
+  // only unlocks an Audio element that has played within a gesture.
+  const prime = useCallback(() => {
+    const el = audioRef.current;
+    if (!el || playingRef.current) return;
+    el.src = SILENCE;
+    el.play().catch(() => {});
+  }, []);
 
   const playNext = useCallback(() => {
     if (playingRef.current) return;
@@ -114,4 +129,6 @@ export function useTtsVoice(
       alive = false;
     };
   }, [text, locale, enabled, sessionId, playNext]);
+
+  return { prime };
 }

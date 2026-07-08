@@ -22,8 +22,6 @@ export default function Listener() {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const sub = useSubscriber(audioRef, id, session?.localRelayUrl ?? null);
   const [aiVoice, setAiVoice] = useState(false);
-  // Keep the screen awake while audio (human or AI) is playing.
-  useWakeLock(sub.state === "playing" || sub.state === "connecting" || aiVoice);
 
   // Follow the publisher: feed fresh channel data into the subscription so a
   // restarted interpreter (new SFU coordinates) or an offline→online flip
@@ -71,7 +69,11 @@ export default function Listener() {
   }
 
   // Phase 3: optional AI voice — speak each caption line on this device.
-  useTtsVoice(cap.text, capLocale, aiVoice, id);
+  const tts = useTtsVoice(cap.text, capLocale, aiVoice, id);
+
+  // Keep the screen awake while audio is playing — the AI voice only counts
+  // while captions are actually flowing (not a stale toggle from earlier).
+  useWakeLock(sub.state === "playing" || sub.state === "connecting" || (aiVoice && cap.active));
 
   const sorted = useMemo(
     () => [...channels].sort((a, b) => (a.kind === "original" ? -1 : b.kind === "original" ? 1 : 0)),
@@ -90,7 +92,19 @@ export default function Listener() {
   const capLocales = LANGS.filter((l) => capSet.has(l.code));
 
   if (loading) return <Center>…</Center>;
-  if (error || !id || !session) return <Center>{strings(ui).notFound}</Center>;
+  if (error || !id || !session)
+    return (
+      <Center>
+        {strings(ui).notFound}
+        <button
+          className="btn btn-block"
+          style={{ marginTop: 16 }}
+          onClick={() => window.location.reload()}
+        >
+          {strings(ui).retry}
+        </button>
+      </Center>
+    );
 
   if (status === "ended") {
     return (
@@ -178,7 +192,11 @@ export default function Listener() {
               <input
                 type="checkbox"
                 checked={aiVoice}
-                onChange={(e) => setAiVoice(e.target.checked)}
+                onChange={(e) => {
+                  // Unlock the TTS Audio element inside this gesture (iOS).
+                  if (e.target.checked) tts.prime();
+                  setAiVoice(e.target.checked);
+                }}
                 aria-label={`${t.ai} (beta)`}
                 style={{ width: 18, height: 18 }}
               />

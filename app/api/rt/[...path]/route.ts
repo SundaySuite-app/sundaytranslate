@@ -28,13 +28,16 @@ async function proxy(req: Request, path: string[]): Promise<Response> {
   const appToken = process.env.CF_REALTIME_APP_TOKEN;
   if (!appId || !appToken) return fail(503, "sfu_not_configured");
 
-  if (!rateLimit(`rt:${clientIp(req)}`, 240, 60_000)) return fail(429, "rate_limited");
-
   // Bind every proxied SFU op to a real live session (publisher or listener both
   // carry the session id). Without this the proxy is an open relay that mints SFU
   // sessions/tracks under our App Token — anyone could burn the Realtime budget.
   const sessionId = req.headers.get("x-session-id");
   if (!sessionId) return fail(401, "session_required");
+
+  // Key the limit on IP+session: a whole congregation shares the church wifi's
+  // single IP, and a service-start join burst must not 429 legitimate listeners.
+  if (!rateLimit(`rt:${sessionId.slice(0, 64)}:${clientIp(req)}`, 240, 60_000))
+    return fail(429, "rate_limited");
   const session = await getSession(sessionId);
   if (!session || session.status !== "live") return fail(401, "session_required");
 

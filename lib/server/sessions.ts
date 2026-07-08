@@ -213,11 +213,21 @@ export async function setSessionRelay(
     .eq("id", id);
 }
 
+/** Constant-time string compare — a plain !== leaks match-length timing. */
+function safeEqual(a: string, b: string): boolean {
+  const ea = new TextEncoder().encode(a);
+  const eb = new TextEncoder().encode(b);
+  if (ea.length !== eb.length) return false;
+  let diff = 0;
+  for (let i = 0; i < ea.length; i++) diff |= ea[i] ^ eb[i];
+  return diff === 0;
+}
+
 /** Verify a write secret against a live, unexpired session. Returns the row or null. */
 export async function verifySecret(id: string, secret: string | null): Promise<SessionRow | null> {
   if (!secret) return null;
   const r = await getRow(id);
-  if (!r || r.status !== "live" || isExpired(r) || r.secret !== secret) return null;
+  if (!r || r.status !== "live" || isExpired(r) || !safeEqual(r.secret, secret)) return null;
   return r;
 }
 
@@ -344,7 +354,11 @@ export async function setChannelPublish(
 
 export async function endSession(id: string): Promise<void> {
   const sb = createServiceClient();
-  await sb.from("sessions").update({ status: "ended" }).eq("id", id);
+  const { error } = await sb.from("sessions").update({ status: "ended" }).eq("id", id);
+  if (error) throw error;
+  // Privacy: caption transcripts must not outlive the session ("no audio is
+  // recorded" — the text shouldn't linger either). Best-effort cleanup.
+  await sb.from("captions").delete().eq("session_id", id);
 }
 
 // ── captions (phase 2) ──────────────────────────────────────────────────────
