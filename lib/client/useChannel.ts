@@ -28,7 +28,13 @@ export function useChannel(
 
     const supabase = createClient();
     const channel = supabase.channel(topic, {
-      config: { broadcast: { self: false } },
+      // private: Realtime authorizes each subscriber against the realtime.messages
+      // RLS policy (migration 20260708120000). anon/authenticated may RECEIVE on
+      // translator:session:* but cannot .send() forged events — closing the spoof
+      // hole where anyone who learns a session id could fake e.g. AI captions on
+      // the storskjerm. Server publish (lib/server/broadcast.ts) is unaffected —
+      // it uses the service_role REST endpoint, which bypasses RLS.
+      config: { broadcast: { self: false }, private: true },
     });
 
     channel.on("broadcast", { event: "*" }, (msg) => {
