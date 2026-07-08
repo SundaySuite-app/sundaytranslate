@@ -4,11 +4,25 @@ import { useState } from "react";
 import { useParams } from "next/navigation";
 import { VuMeter } from "@/components/VuMeter";
 import { InlineError } from "@/components/InlineError";
-import { useHashSecret, useVuMeter, useAudioInputs } from "@/lib/client/hooks";
+import { useHashSecret, useVuMeter, useAudioInputs, useWakeLock } from "@/lib/client/hooks";
 import { useStaffSession } from "@/lib/client/useStaffSession";
 import { usePublisher } from "@/lib/client/usePublisher";
 import { useLiveChannels } from "@/lib/client/useLiveChannels";
 import { useCaptioner } from "@/lib/client/useCaptioner";
+
+/** Human-friendly Norwegian text for the publisher's error codes. */
+function errorText(code: string): string {
+  switch (code) {
+    case "unauthorized":
+      return "Lenken er ikke gyldig lenger. Be operatøren om en ny kilde-QR.";
+    case "mic_lost":
+      return "Lydkilden forsvant (lydkort frakoblet?). Sjekk den og start på nytt.";
+    case "connection_lost":
+      return "Mistet forbindelsen og fikk ikke koblet til igjen. Sjekk nettet og start på nytt.";
+    default:
+      return "Tilkobling feilet. Sjekk lydkilde og nett, og prøv igjen.";
+  }
+}
 
 export default function Source() {
   const pin = String(useParams().pin);
@@ -18,16 +32,22 @@ export default function Source() {
   const level = useVuMeter(pub.stream);
 
   const [granted, setGranted] = useState(false);
+  const [grantError, setGrantError] = useState(false);
   const [device, setDevice] = useState("");
   const devices = useAudioInputs(granted);
 
   // Phase 2 captions: feed the published stream to ASR for every language the
-  // operator added (interpreter optional).
+  // operator added (interpreter optional). Dedupe — a human and an AI channel
+  // for the same language must not double the translate cost per chunk.
   const { channels } = useLiveChannels(id);
   const [captions, setCaptions] = useState(false);
-  const targets = channels
-    .filter((c) => c.kind !== "original" && c.targetLocale)
-    .map((c) => c.targetLocale as string);
+  const targets = Array.from(
+    new Set(
+      channels
+        .filter((c) => c.kind !== "original" && c.targetLocale)
+        .map((c) => c.targetLocale as string),
+    ),
+  );
   useCaptioner({
     sessionId: id,
     secret,
@@ -37,13 +57,18 @@ export default function Source() {
     enabled: captions && pub.state === "live",
   });
 
+  const live = pub.state === "live" || pub.state === "reconnecting";
+  // The source device must not lock mid-service — that kills the feed.
+  useWakeLock(live || pub.state === "connecting");
+
   async function grant() {
+    setGrantError(false);
     try {
       const s = await navigator.mediaDevices.getUserMedia({ audio: true });
       s.getTracks().forEach((t) => t.stop());
       setGranted(true);
     } catch {
-      /* denied */
+      setGrantError(true);
     }
   }
 
@@ -57,8 +82,6 @@ export default function Source() {
   if (loading) return <Center>Laster…</Center>;
   if (error || !id) return <Center>Fant ingen aktiv sesjon for PIN {pin}.</Center>;
   if (!secret) return <Center>Denne siden må åpnes via operatørens kilde-QR.</Center>;
-
-  const live = pub.state === "live";
 
   return (
     <main className="center-screen" aria-labelledby="kilde-title">
@@ -77,19 +100,29 @@ export default function Source() {
           <p role="status" aria-live="polite" className="visually-hidden">
             {pub.state === "connecting"
               ? "Kobler til…"
-              : live
-                ? "Sender original-lyd nå."
-                : pub.state === "error"
-                  ? "Tilkobling feilet."
-                  : granted
-                    ? "Klar til å starte sending."
-                    : "Mangler tilgang til lyd."}
+              : pub.state === "reconnecting"
+                ? "Mistet forbindelsen — kobler til igjen…"
+                : live
+                  ? "Sender original-lyd nå."
+                  : pub.state === "error"
+                    ? "Tilkobling feilet."
+                    : granted
+                      ? "Klar til å starte sending."
+                      : "Mangler tilgang til lyd."}
           </p>
 
           {!granted ? (
-            <button className="btn btn-primary btn-lg btn-block" onClick={grant}>
-              Gi tilgang til lyd
-            </button>
+            <>
+              <button className="btn btn-primary btn-lg btn-block" onClick={grant}>
+                Gi tilgang til lyd
+              </button>
+              {grantError && (
+                <InlineError>
+                  Fikk ikke tilgang til lyd. Tillat mikrofon/lydinngang for denne
+                  siden i nettleserens innstillinger og prøv igjen.
+                </InlineError>
+              )}
+            </>
           ) : (
             <>
               <div className="field">
@@ -131,7 +164,11 @@ export default function Source() {
               )}
 
               <p className="muted" style={{ fontSize: 14, margin: 0 }}>
-                {live ? (
+                {pub.state === "reconnecting" ? (
+                  <>
+                    <span className="live-dot" aria-hidden="true" /> Kobler til igjen…
+                  </>
+                ) : live ? (
                   <>
                     <span className="live-dot" aria-hidden="true" /> Sender original-lyd
                   </>
@@ -159,11 +196,12 @@ export default function Source() {
                   </span>
                 </label>
               )}
-              {pub.state === "error" && (
+              {pub.state === "reconnecting" && (
                 <InlineError>
-                  Tilkobling feilet. Sjekk lydkilde og nett, og prøv igjen.
+                  Mistet forbindelsen — prøver å koble til igjen automatisk.
                 </InlineError>
               )}
+              {pub.state === "error" && <InlineError>{errorText(pub.error)}</InlineError>}
             </>
           )}
         </div>

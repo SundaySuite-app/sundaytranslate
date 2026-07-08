@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useParams, useSearchParams } from "next/navigation";
 import { Qr } from "@/components/Qr";
+import { InlineError } from "@/components/InlineError";
 import { useHashSecret } from "@/lib/client/hooks";
 import { useLiveChannels } from "@/lib/client/useLiveChannels";
 import { LANGS, langName } from "@/lib/locales";
@@ -16,6 +17,7 @@ export default function Operator() {
 
   const [adding, setAdding] = useState("");
   const [busy, setBusy] = useState(false);
+  const [channelError, setChannelError] = useState("");
 
   const origin = typeof window !== "undefined" ? window.location.origin : "";
   const listenUrl = `${origin}/${pin}`;
@@ -30,24 +32,48 @@ export default function Operator() {
   async function addLanguage() {
     if (!adding || !secret) return;
     setBusy(true);
+    setChannelError("");
     try {
-      await fetch(`/api/sessions/${id}/channels`, {
+      const res = await fetch(`/api/sessions/${id}/channels`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${secret}` },
         body: JSON.stringify({ kind: "human", targetLocale: adding, label: langName(adding) }),
       });
+      if (!res.ok) throw new Error(`add ${res.status}`);
       setAdding("");
+    } catch {
+      setChannelError("Fikk ikke lagt til språket. Sjekk nettet og prøv igjen.");
     } finally {
       setBusy(false);
     }
   }
 
+  async function removeChannel(channelId: string, name: string) {
+    if (!secret || !confirm(`Fjerne kanalen ${name}?`)) return;
+    setChannelError("");
+    try {
+      const res = await fetch(`/api/sessions/${id}/channels`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${secret}` },
+        body: JSON.stringify({ channelId }),
+      });
+      if (!res.ok) throw new Error(`delete ${res.status}`);
+    } catch {
+      setChannelError("Fikk ikke fjernet kanalen. Sjekk nettet og prøv igjen.");
+    }
+  }
+
   async function end() {
     if (!secret || !confirm("Avslutte sesjonen for alle?")) return;
-    await fetch(`/api/sessions/${id}/end`, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${secret}` },
-    });
+    try {
+      const res = await fetch(`/api/sessions/${id}/end`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${secret}` },
+      });
+      if (!res.ok) throw new Error(`end ${res.status}`);
+    } catch {
+      setChannelError("Fikk ikke avsluttet sesjonen. Sjekk nettet og prøv igjen.");
+    }
   }
 
   if (status === "ended") {
@@ -128,17 +154,30 @@ export default function Operator() {
                     ? `🤖 ${langName(c.targetLocale)} (AI)`
                     : `🎙️ ${langName(c.targetLocale)}`}
               </span>
-              <span className="muted" style={{ fontSize: 14 }}>
-                {c.isLive ? (
-                  <>
-                    <span className="live-dot" aria-hidden="true" /> sender
-                  </>
-                ) : (
-                  "venter på tilkobling"
+              <span style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                <span className="muted" style={{ fontSize: 14 }}>
+                  {c.isLive ? (
+                    <>
+                      <span className="live-dot" aria-hidden="true" /> sender
+                    </>
+                  ) : (
+                    "venter på tilkobling"
+                  )}
+                </span>
+                {c.kind !== "original" && !c.isLive && (
+                  <button
+                    className="btn btn-ghost"
+                    style={{ padding: "4px 10px", fontSize: 13 }}
+                    onClick={() => removeChannel(c.id, langName(c.targetLocale))}
+                    aria-label={`Fjern kanalen ${langName(c.targetLocale)}`}
+                  >
+                    Fjern
+                  </button>
                 )}
               </span>
             </div>
           ))}
+          {channelError && <InlineError>{channelError}</InlineError>}
 
           <div style={{ display: "flex", gap: 10, marginTop: 8 }}>
             <select

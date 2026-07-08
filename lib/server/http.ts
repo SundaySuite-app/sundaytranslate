@@ -5,7 +5,8 @@ import "server-only";
 // per-process rate limiter, and client IP extraction.
 
 export function ok(data: unknown, init?: ResponseInit): Response {
-  return Response.json({ ok: true, ...(data as object) }, init);
+  // `ok: true` last so a payload key can never overwrite the envelope flag.
+  return Response.json({ ...(data as object), ok: true }, init);
 }
 
 export function fail(status: number, error: string, extra?: object): Response {
@@ -36,6 +37,10 @@ const buckets = new Map<string, { count: number; resetAt: number }>();
 
 export function rateLimit(key: string, limit: number, windowMs: number): boolean {
   const now = Date.now();
+  // Opportunistic sweep so the per-isolate map can't grow without bound.
+  if (buckets.size > 1000) {
+    for (const [k, v] of buckets) if (v.resetAt <= now) buckets.delete(k);
+  }
   const b = buckets.get(key);
   if (!b || b.resetAt <= now) {
     buckets.set(key, { count: 1, resetAt: now + windowMs });

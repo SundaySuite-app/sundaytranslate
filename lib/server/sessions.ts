@@ -130,8 +130,6 @@ export async function getOwnedSessionSecret(
  * cascade via the FK / explicit cleanup. */
 export async function deleteSessionOwned(id: string, hostUserId: string): Promise<boolean> {
   const sb = createServiceClient();
-  // captions has no FK cascade to sessions — clear it first, best-effort.
-  await sb.from("captions").delete().eq("session_id", id);
   const { data, error } = await sb
     .from("sessions")
     .delete()
@@ -139,7 +137,18 @@ export async function deleteSessionOwned(id: string, hostUserId: string): Promis
     .eq("host_user_id", hostUserId)
     .select("id");
   if (error) throw error;
-  return Array.isArray(data) && data.length > 0;
+  const deleted = Array.isArray(data) && data.length > 0;
+  // captions has no FK cascade to sessions — clear it AFTER the owner-gated
+  // delete succeeded (clearing first would let any host wipe another session's
+  // captions by guessing its id). Best-effort; lazy GC also sweeps orphans.
+  if (deleted) await sb.from("captions").delete().eq("session_id", id);
+  return deleted;
+}
+
+/** True when the row's 24h TTL has passed — expired sessions must behave as
+ * gone even before the lazy GC (which only runs on create) sweeps them. */
+function isExpired(r: Pick<SessionRow, "expires_at">): boolean {
+  return !!r.expires_at && new Date(r.expires_at).getTime() <= Date.now();
 }
 
 /** Resolve a PIN to a live session (no secret). */
@@ -151,19 +160,22 @@ export async function sessionByPin(pin: string): Promise<SessionView | null> {
     | { id: string; title: string; source_locale: string; status: "live" | "ended" }
     | undefined;
   if (!row) return null;
-  // The RPC's fixed return shape doesn't carry the relay url; enrich it so a
-  // listener resolving by PIN learns whether a local relay hosts this session.
-  const { data: relay } = await sb
+  // The RPC's fixed return shape doesn't carry the relay url or expiry; enrich
+  // it so a listener learns about a local relay — and so an expired-but-not-yet-
+  // GC'd session stops resolving.
+  const { data: extra } = await sb
     .from("sessions")
-    .select("local_relay_url")
+    .select("local_relay_url, expires_at")
     .eq("id", row.id)
     .maybeSingle();
+  const enrich = extra as { local_relay_url: string | null; expires_at: string } | null;
+  if (enrich && isExpired(enrich)) return null;
   return {
     id: row.id,
     title: row.title,
     sourceLocale: row.source_locale,
     status: row.status,
-    localRelayUrl: (relay as { local_relay_url: string | null } | null)?.local_relay_url ?? null,
+    localRelayUrl: enrich?.local_relay_url ?? null,
   };
 }
 
@@ -175,6 +187,7 @@ async function getRow(id: string): Promise<SessionRow | null> {
 
 export async function getSession(id: string): Promise<SessionView | null> {
   const r = await getRow(id);
+  if (r && isExpired(r)) return null;
   return r
     ? {
         id: r.id,
@@ -200,11 +213,11 @@ export async function setSessionRelay(
     .eq("id", id);
 }
 
-/** Verify a write secret against a live session. Returns the row or null. */
+/** Verify a write secret against a live, unexpired session. Returns the row or null. */
 export async function verifySecret(id: string, secret: string | null): Promise<SessionRow | null> {
   if (!secret) return null;
   const r = await getRow(id);
-  if (!r || r.status !== "live" || r.secret !== secret) return null;
+  if (!r || r.status !== "live" || isExpired(r) || r.secret !== secret) return null;
   return r;
 }
 
@@ -235,15 +248,16 @@ export async function upsertChannel(
     : await match.is("target_locale", null).maybeSingle();
 
   if (existing) {
-    const { data } = await sb
+    const { data, error } = await sb
       .from("channels")
       .update({ label: input.label, source_locale: input.sourceLocale, updated_at: new Date().toISOString() })
       .eq("id", (existing as ChannelRow).id)
       .select("*")
       .single();
+    if (error) throw error;
     return toView(data as ChannelRow);
   }
-  const { data } = await sb
+  const { data, error } = await sb
     .from("channels")
     .insert({
       session_id: sessionId,
@@ -254,7 +268,34 @@ export async function upsertChannel(
     })
     .select("*")
     .single();
+  if (error) {
+    // Concurrent create of the same (session, kind, target) — e.g. two
+    // interpreters starting the same language at once — trips the unique
+    // index. Treat it as "already exists": re-read and return that row.
+    if ((error as { code?: string }).code === "23505") {
+      const retry = sb.from("channels").select("*").eq("session_id", sessionId).eq("kind", input.kind);
+      const { data: row } = input.targetLocale
+        ? await retry.eq("target_locale", input.targetLocale).maybeSingle()
+        : await retry.is("target_locale", null).maybeSingle();
+      if (row) return toView(row as ChannelRow);
+    }
+    throw error;
+  }
   return toView(data as ChannelRow);
+}
+
+/** Remove a channel (operator cleanup of a mistakenly added language). Scoped
+ * to the authenticated session. Returns false when nothing matched. */
+export async function deleteChannel(sessionId: string, channelId: string): Promise<boolean> {
+  const sb = createServiceClient();
+  const { data, error } = await sb
+    .from("channels")
+    .delete()
+    .eq("id", channelId)
+    .eq("session_id", sessionId)
+    .select("id");
+  if (error) throw error;
+  return Array.isArray(data) && data.length > 0;
 }
 
 /** A publisher (re)registered or dropped a channel. Going live writes the cloud
@@ -275,7 +316,7 @@ export async function setChannelPublish(
     localStream?: string | null;
     localLive?: boolean;
   },
-): Promise<void> {
+): Promise<boolean> {
   const sb = createServiceClient();
   const patch: Record<string, unknown> = {
     is_live: input.live,
@@ -289,7 +330,16 @@ export async function setChannelPublish(
     patch.local_stream = input.localStream;
     patch.local_is_live = input.localLive ?? false;
   }
-  await sb.from("channels").update(patch).eq("id", channelId).eq("session_id", sessionId);
+  const { data, error } = await sb
+    .from("channels")
+    .update(patch)
+    .eq("id", channelId)
+    .eq("session_id", sessionId)
+    .select("id");
+  if (error) throw error;
+  // False = the channelId didn't belong to this session; the route answers 404
+  // so a publisher learns its registration silently failed.
+  return Array.isArray(data) && data.length > 0;
 }
 
 export async function endSession(id: string): Promise<void> {
@@ -313,6 +363,16 @@ export async function upsertCaption(
   text: string,
 ): Promise<void> {
   const sb = createServiceClient();
+  // A slow ASR/translate round can finish AFTER a newer chunk already wrote its
+  // line; never let the older line clobber the snapshot. (Read-then-write race
+  // is acceptable: captions are a hint layer and clients also compare seq.)
+  const { data: cur } = await sb
+    .from("captions")
+    .select("seq")
+    .eq("session_id", sessionId)
+    .eq("locale", locale)
+    .maybeSingle();
+  if (cur && Number((cur as { seq: number }).seq) >= seq) return;
   await sb.from("captions").upsert(
     { session_id: sessionId, locale, seq, text, updated_at: new Date().toISOString() },
     { onConflict: "session_id,locale" },

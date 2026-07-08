@@ -23,6 +23,15 @@ export default function Listener() {
   // Keep the screen awake while audio (human or AI) is playing.
   useWakeLock(sub.state === "playing" || sub.state === "connecting" || aiVoice);
 
+  // Follow the publisher: feed fresh channel data into the subscription so a
+  // restarted interpreter (new SFU coordinates) or an offline→online flip
+  // reconnects the listener automatically.
+  const { activeId, sync } = sub;
+  useEffect(() => {
+    if (!activeId) return;
+    sync(channels.find((c) => c.id === activeId) ?? null);
+  }, [channels, activeId, sync]);
+
   // Listener UI language — guess from the browser, let them change it.
   const [ui, setUi] = useState("en");
   useEffect(() => {
@@ -130,7 +139,7 @@ export default function Listener() {
                 type="checkbox"
                 checked={aiVoice}
                 onChange={(e) => setAiVoice(e.target.checked)}
-                aria-label="Les undertekster høyt med AI-stemme (beta)"
+                aria-label={`${t.ai} (beta)`}
                 style={{ width: 18, height: 18 }}
               />
               <span style={{ fontSize: 14 }}>
@@ -160,7 +169,9 @@ export default function Listener() {
           {sub.activeId
             ? sub.state === "connecting"
               ? t.connecting
-              : t.playing
+              : sub.state === "error"
+                ? t.connectionLost
+                : t.playing
             : ""}
         </p>
 
@@ -173,7 +184,9 @@ export default function Listener() {
             const stateText = selected
               ? sub.state === "connecting"
                 ? t.connecting
-                : t.playing
+                : sub.state === "error"
+                  ? `${t.connectionLost} ${t.retry}`
+                  : t.playing
               : ready
                 ? ""
                 : t.waiting;
@@ -182,11 +195,17 @@ export default function Listener() {
                 key={c.id}
                 className="channel"
                 data-selected={selected}
-                disabled={!ready}
+                disabled={!ready && !selected}
                 aria-pressed={selected}
                 aria-label={`${l.main}${l.sub ? ` — ${l.sub}` : ""}${stateText ? `. ${stateText}` : ""}`}
-                onClick={() => (selected ? sub.stop() : sub.listen(c))}
-                style={{ opacity: ready ? 1 : 0.5 }}
+                onClick={() =>
+                  selected
+                    ? sub.state === "error"
+                      ? sub.retry()
+                      : sub.stop()
+                    : sub.listen(c)
+                }
+                style={{ opacity: ready || selected ? 1 : 0.5 }}
               >
                 <span className="flag" aria-hidden="true">{l.icon}</span>
                 <span style={{ flex: 1 }}>
@@ -197,11 +216,17 @@ export default function Listener() {
                     </span>
                   )}
                 </span>
-                <span className="muted" style={{ fontSize: 14 }} aria-hidden="true">
+                <span
+                  className="muted"
+                  style={{ fontSize: 14, ...(selected && sub.state === "error" ? { color: "#e5484d" } : {}) }}
+                  aria-hidden="true"
+                >
                   {selected
                     ? sub.state === "connecting"
                       ? t.connecting
-                      : `▶ ${t.playing}`
+                      : sub.state === "error"
+                        ? `⚠ ${t.retry}`
+                        : `▶ ${t.playing}`
                     : ready
                       ? ""
                       : t.waiting}

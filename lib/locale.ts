@@ -21,6 +21,8 @@ export interface Strings {
   noRecording: string;
   notFound: string;
   uiLanguage: string;
+  connectionLost: string;
+  retry: string;
 }
 
 const en: Strings = {
@@ -40,6 +42,8 @@ const en: Strings = {
   noRecording: "No audio is recorded.",
   notFound: "No live session found for that PIN.",
   uiLanguage: "Language",
+  connectionLost: "Connection lost.",
+  retry: "Try again",
 };
 
 const no: Strings = {
@@ -59,6 +63,8 @@ const no: Strings = {
   noRecording: "Ingen lyd tas opp.",
   notFound: "Fant ingen aktiv sesjon for den PIN-en.",
   uiLanguage: "Språk",
+  connectionLost: "Mistet forbindelsen.",
+  retry: "Prøv igjen",
 };
 
 const nn: Strings = {
@@ -71,6 +77,7 @@ const nn: Strings = {
   earbuds: "Bruk øyreproppar for best oppleving.",
   keepAwake: "Hald skjermen på medan du lyttar.",
   notFound: "Fann ingen aktiv sesjon for den PIN-en.",
+  connectionLost: "Mista sambandet.",
 };
 
 const pl: Strings = {
@@ -90,6 +97,8 @@ const pl: Strings = {
   noRecording: "Dźwięk nie jest nagrywany.",
   notFound: "Nie znaleziono aktywnej sesji dla tego PIN-u.",
   uiLanguage: "Język",
+  connectionLost: "Utracono połączenie.",
+  retry: "Spróbuj ponownie",
 };
 
 const uk: Strings = {
@@ -109,6 +118,8 @@ const uk: Strings = {
   noRecording: "Звук не записується.",
   notFound: "Не знайдено активної сесії для цього PIN-коду.",
   uiLanguage: "Мова",
+  connectionLost: "З'єднання втрачено.",
+  retry: "Спробувати ще раз",
 };
 
 const ar: Strings = {
@@ -128,6 +139,8 @@ const ar: Strings = {
   noRecording: "لا يتم تسجيل أي صوت.",
   notFound: "لم يتم العثور على جلسة نشطة لهذا الرمز.",
   uiLanguage: "اللغة",
+  connectionLost: "انقطع الاتصال.",
+  retry: "حاول مرة أخرى",
 };
 
 const so: Strings = {
@@ -147,6 +160,8 @@ const so: Strings = {
   noRecording: "Cod lama duubo.",
   notFound: "Lama helin fadhi firfircoon oo PIN-kaas ah.",
   uiLanguage: "Luqad",
+  connectionLost: "Xiriirku wuu go'ay.",
+  retry: "Isku day mar kale",
 };
 
 const DICT: Record<UiLocale, Strings> = { en, no, nn, pl, uk, ar, so };

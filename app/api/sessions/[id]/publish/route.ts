@@ -35,8 +35,15 @@ export async function POST(
   const live = body.live !== false;
   // Going live needs the coordinates; going offline just needs the channel.
   if (live && (!body.sfuSessionId || !body.trackName)) return fail(400, "missing_fields");
+  // Length-cap stored coordinates — they ride every public channel-list response.
+  if (
+    (body.sfuSessionId ?? "").length > 200 ||
+    (body.trackName ?? "").length > 120 ||
+    (body.localStream ?? "").length > 200
+  )
+    return fail(400, "invalid_fields");
 
-  await setChannelPublish(id, body.channelId, {
+  const matched = await setChannelPublish(id, body.channelId, {
     sfuSessionId: body.sfuSessionId,
     trackName: body.trackName,
     live,
@@ -44,6 +51,7 @@ export async function POST(
       ? { localStream: body.localStream, localLive: body.localLive ?? false }
       : {}),
   });
+  if (!matched) return fail(404, "channel_not_found");
   await broadcast(rtChannels.session(id), events.channels, {});
   return ok({});
 }

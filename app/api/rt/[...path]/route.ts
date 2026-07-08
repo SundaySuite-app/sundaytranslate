@@ -44,6 +44,9 @@ async function proxy(req: Request, path: string[]): Promise<Response> {
 
   const body = await req.text();
   let upstream: Response;
+  // Bounded: a stalled SFU fetch must never hang the Worker (timedFetch gotcha).
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 10_000);
   try {
     upstream = await fetch(`${SFU_BASE}/${appId}/${sub}`, {
       method: req.method,
@@ -52,9 +55,12 @@ async function proxy(req: Request, path: string[]): Promise<Response> {
         "Content-Type": "application/json",
       },
       body: body || undefined,
+      signal: ctrl.signal,
     });
   } catch {
     return fail(502, "sfu_unreachable");
+  } finally {
+    clearTimeout(timer);
   }
 
   // Pass the SFU's JSON response straight through (SDP answers/offers etc.).

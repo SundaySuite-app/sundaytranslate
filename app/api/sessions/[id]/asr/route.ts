@@ -13,7 +13,7 @@
  * Degrades gracefully: no AI binding / no key → returns { transcript: null }
  * and the listener simply sees no captions. Never blocks the audio path.
  */
-import { ok, fail } from "@/lib/server/http";
+import { ok, fail, rateLimit } from "@/lib/server/http";
 import { broadcast } from "@/lib/server/broadcast";
 import { channels as rtChannels, events } from "@/lib/realtime";
 import { upsertCaption, verifySecret } from "@/lib/server/sessions";
@@ -32,15 +32,28 @@ export async function POST(
   const session = await verifySecret(id, bearer(req));
   if (!session) return fail(401, "unauthorized");
 
+  // Cost guard: one healthy captioner sends ~12 chunks/min; anything well past
+  // that is a bug or abuse burning Whisper + up to 12 Claude calls per chunk.
+  if (!rateLimit(`asr:${id}`, 30, 60_000)) return fail(429, "rate_limited");
+
   const url = new URL(req.url);
   const source = (url.searchParams.get("source") || session.source_locale).slice(0, 8);
-  const targets = (url.searchParams.get("targets") || "")
-    .split(",")
-    .map((s) => s.trim())
-    .filter(Boolean)
-    .slice(0, 12);
+  const targets = Array.from(
+    new Set(
+      (url.searchParams.get("targets") || "")
+        .split(",")
+        .map((s) => s.trim().slice(0, 8))
+        .filter(Boolean),
+    ),
+  ).slice(0, 12);
 
+  // A ~5s opus chunk is tens of kB; cap well above that so an oversized body
+  // can't balloon Worker memory (asr expands every byte into a JS array).
+  const MAX_BYTES = 2_000_000;
+  const declared = Number(req.headers.get("content-length") || 0);
+  if (declared > MAX_BYTES) return fail(413, "too_large");
   const bytes = new Uint8Array(await req.arrayBuffer());
+  if (bytes.length > MAX_BYTES) return fail(413, "too_large");
   if (bytes.length < 1200) return ok({ transcript: null, reason: "too_short" });
 
   const transcript = await transcribe(bytes);

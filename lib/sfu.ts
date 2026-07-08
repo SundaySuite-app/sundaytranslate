@@ -84,6 +84,7 @@ function waitIceComplete(pc: RTCPeerConnection, capMs = 1500): Promise<void> {
   if (pc.iceGatheringState === "complete") return Promise.resolve();
   return new Promise((resolve) => {
     const done = () => {
+      clearTimeout(timer);
       pc.removeEventListener("icegatheringstatechange", check);
       resolve();
     };
@@ -91,7 +92,7 @@ function waitIceComplete(pc: RTCPeerConnection, capMs = 1500): Promise<void> {
       if (pc.iceGatheringState === "complete") done();
     };
     pc.addEventListener("icegatheringstatechange", check);
-    setTimeout(done, capMs);
+    const timer = setTimeout(done, capMs);
   });
 }
 
@@ -116,16 +117,23 @@ export async function publishTrack(
   const pc = new RTCPeerConnection(ICE);
   const tx = pc.addTransceiver(audio, { direction: "sendonly" });
 
-  await pc.setLocalDescription(await pc.createOffer());
-  await waitIceComplete(pc);
+  let sessionId: string;
+  try {
+    await pc.setLocalDescription(await pc.createOffer());
+    await waitIceComplete(pc);
 
-  const { sessionId } = await rt<{ sessionId: string }>("POST", "sessions/new", {}, appSessionId);
-  const ans = await rt<TracksResponse>("POST", `sessions/${sessionId}/tracks/new`, {
-    sessionDescription: { type: "offer", sdp: pc.localDescription!.sdp },
-    tracks: [{ location: "local", mid: tx.mid, trackName }],
-  }, appSessionId);
-  if (ans.sessionDescription) {
-    await pc.setRemoteDescription(ans.sessionDescription as RTCSessionDescriptionInit);
+    ({ sessionId } = await rt<{ sessionId: string }>("POST", "sessions/new", {}, appSessionId));
+    const ans = await rt<TracksResponse>("POST", `sessions/${sessionId}/tracks/new`, {
+      sessionDescription: { type: "offer", sdp: pc.localDescription!.sdp },
+      tracks: [{ location: "local", mid: tx.mid, trackName }],
+    }, appSessionId);
+    if (ans.sessionDescription) {
+      await pc.setRemoteDescription(ans.sessionDescription as RTCSessionDescriptionInit);
+    }
+  } catch (err) {
+    // Never leak a half-built peer connection; the caller owns the mic track.
+    pc.close();
+    throw err;
   }
 
   return {
@@ -159,18 +167,23 @@ export async function subscribeTrack(
     onStream(e.streams[0] ?? new MediaStream([e.track]));
   });
 
-  const { sessionId } = await rt<{ sessionId: string }>("POST", "sessions/new", {}, appSessionId);
-  const offer = await rt<TracksResponse>("POST", `sessions/${sessionId}/tracks/new`, {
-    tracks: [{ location: "remote", sessionId: remoteSfuSessionId, trackName }],
-  }, appSessionId);
-  if (!offer.sessionDescription) throw new Error("no_offer");
+  try {
+    const { sessionId } = await rt<{ sessionId: string }>("POST", "sessions/new", {}, appSessionId);
+    const offer = await rt<TracksResponse>("POST", `sessions/${sessionId}/tracks/new`, {
+      tracks: [{ location: "remote", sessionId: remoteSfuSessionId, trackName }],
+    }, appSessionId);
+    if (!offer.sessionDescription) throw new Error("no_offer");
 
-  await pc.setRemoteDescription(offer.sessionDescription as RTCSessionDescriptionInit);
-  await pc.setLocalDescription(await pc.createAnswer());
-  await waitIceComplete(pc);
-  await rt("PUT", `sessions/${sessionId}/renegotiate`, {
-    sessionDescription: { type: "answer", sdp: pc.localDescription!.sdp },
-  }, appSessionId);
+    await pc.setRemoteDescription(offer.sessionDescription as RTCSessionDescriptionInit);
+    await pc.setLocalDescription(await pc.createAnswer());
+    await waitIceComplete(pc);
+    await rt("PUT", `sessions/${sessionId}/renegotiate`, {
+      sessionDescription: { type: "answer", sdp: pc.localDescription!.sdp },
+    }, appSessionId);
+  } catch (err) {
+    pc.close();
+    throw err;
+  }
 
   return {
     pc,
