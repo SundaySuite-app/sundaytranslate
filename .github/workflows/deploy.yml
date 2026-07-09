@@ -12,13 +12,11 @@
 # ANTHROPIC_API_KEY) live in the Worker itself via `wrangler secret put` and
 # survive deploys — this workflow never touches them.
 #
-# Triggers: pushes to the current feature branch (remove that trigger when the
-# branch merges) and manual dispatch (works once this file is on main).
+# Trigger: manual dispatch only (Actions → deploy → Run workflow) — production
+# deploys are a deliberate act, mirroring the manual flow in CLAUDE.md.
 name: deploy
 on:
   workflow_dispatch:
-  push:
-    branches: [claude/translate-improvements-b4sroh]
 
 concurrency: deploy-production
 
