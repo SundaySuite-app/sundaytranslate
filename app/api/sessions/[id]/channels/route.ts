@@ -6,7 +6,7 @@
 import { ok, fail, readJson } from "@/lib/server/http";
 import { broadcast } from "@/lib/server/broadcast";
 import { channels as rtChannels, events } from "@/lib/realtime";
-import { listChannels, upsertChannel, verifySecret } from "@/lib/server/sessions";
+import { deleteChannel, listChannels, upsertChannel, verifySecret } from "@/lib/server/sessions";
 import type { ChannelKind } from "@/lib/types";
 
 function bearer(req: Request): string | null {
@@ -40,7 +40,11 @@ export async function POST(
   const kind = body?.kind as ChannelKind;
   if (!KINDS.includes(kind)) return fail(400, "invalid_kind");
   const targetLocale =
-    kind === "original" ? null : typeof body?.targetLocale === "string" ? body.targetLocale : null;
+    kind === "original"
+      ? null
+      : typeof body?.targetLocale === "string"
+        ? body.targetLocale.slice(0, 8)
+        : null;
   if (kind !== "original" && !targetLocale) return fail(400, "missing_target");
 
   const channel = await upsertChannel(id, {
@@ -51,4 +55,21 @@ export async function POST(
   });
   await broadcast(rtChannels.session(id), events.channels, {});
   return ok({ channel }, { status: 201 });
+}
+
+/** DELETE — operator removes a mistakenly added channel. Body: { channelId }. */
+export async function DELETE(
+  req: Request,
+  ctx: { params: Promise<{ id: string }> },
+): Promise<Response> {
+  const { id } = await ctx.params;
+  const session = await verifySecret(id, bearer(req));
+  if (!session) return fail(401, "unauthorized");
+
+  const body = await readJson<{ channelId?: string }>(req);
+  if (!body?.channelId) return fail(400, "missing_fields");
+  const removed = await deleteChannel(id, body.channelId);
+  if (!removed) return fail(404, "channel_not_found");
+  await broadcast(rtChannels.session(id), events.channels, {});
+  return ok({});
 }

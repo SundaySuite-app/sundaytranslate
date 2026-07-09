@@ -28,7 +28,14 @@ export function useWakeLock(on: boolean): void {
     async function acquire() {
       if (!on || !nav.wakeLock) return;
       try {
-        ref.current = await nav.wakeLock.request("screen");
+        const sentinel = await nav.wakeLock.request("screen");
+        // The effect may have cleaned up while the request was in flight —
+        // storing the sentinel then would leak a held wake lock.
+        if (cancelled) {
+          sentinel.release().catch(() => {});
+          return;
+        }
+        ref.current = sentinel;
       } catch {
         /* denied / not visible — ignore */
       }
@@ -71,23 +78,32 @@ export function useVuMeter(stream: MediaStream | null): number {
       window.AudioContext ||
       (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
     const ctx = new AC();
+    // iOS creates contexts outside a gesture as "suspended" — without a resume
+    // the meter flatlines at 0 and looks like dead audio while transmitting.
+    if (ctx.state === "suspended") ctx.resume().catch(() => {});
     const src = ctx.createMediaStreamSource(stream);
     const analyser = ctx.createAnalyser();
     analyser.fftSize = 512;
     src.connect(analyser);
     const buf = new Uint8Array(analyser.frequencyBinCount);
     let raf = 0;
-    const tick = () => {
-      analyser.getByteTimeDomainData(buf);
-      let sum = 0;
-      for (let i = 0; i < buf.length; i++) {
-        const v = (buf[i] - 128) / 128;
-        sum += v * v;
+    let last = 0;
+    const tick = (ts: number) => {
+      // Throttle to ~12 Hz — a 60 fps setState re-renders the whole staff page
+      // every frame and burns the phone's battery mid-service.
+      if (ts - last >= 80) {
+        last = ts;
+        analyser.getByteTimeDomainData(buf);
+        let sum = 0;
+        for (let i = 0; i < buf.length; i++) {
+          const v = (buf[i] - 128) / 128;
+          sum += v * v;
+        }
+        setLevel(Math.min(1, Math.sqrt(sum / buf.length) * 2.2));
       }
-      setLevel(Math.min(1, Math.sqrt(sum / buf.length) * 2.2));
       raf = requestAnimationFrame(tick);
     };
-    tick();
+    raf = requestAnimationFrame(tick);
     return () => {
       cancelAnimationFrame(raf);
       src.disconnect();

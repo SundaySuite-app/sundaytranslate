@@ -18,16 +18,25 @@ export async function broadcast(
   if (!url || !key) return;
 
   try {
-    const res = await fetch(`${url}/realtime/v1/api/broadcast`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        apikey: key,
-        Authorization: `Bearer ${key}`,
-      },
-      body: JSON.stringify({ messages: [{ topic, event, payload }] }),
-    });
-    if (!res.ok) console.warn("[broadcast] failed", topic, event, res.status);
+    // Bounded: a stalled Realtime endpoint must never hang the calling route
+    // (the same timedFetch gotcha lib/server/translate.ts documents).
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 5_000);
+    try {
+      const res = await fetch(`${url}/realtime/v1/api/broadcast`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          apikey: key,
+          Authorization: `Bearer ${key}`,
+        },
+        body: JSON.stringify({ messages: [{ topic, event, payload }] }),
+        signal: ctrl.signal,
+      });
+      if (!res.ok) console.warn("[broadcast] failed", topic, event, res.status);
+    } finally {
+      clearTimeout(timer);
+    }
   } catch (err) {
     console.warn("[broadcast] error", topic, event, err);
   }

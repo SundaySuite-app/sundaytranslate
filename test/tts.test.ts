@@ -34,6 +34,12 @@ describe("ttsSupports", () => {
       expect(ttsSupports(loc)).toBe(false);
     }
   });
+
+  it("does not match Object prototype keys as languages", () => {
+    for (const loc of ["constructor", "toString", "hasOwnProperty", "__proto__"]) {
+      expect(ttsSupports(loc)).toBe(false);
+    }
+  });
 });
 
 describe("synthesize — language + input guards", () => {

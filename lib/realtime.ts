@@ -6,6 +6,9 @@
 export const channels = {
   /** Channel list + lifecycle + captions for one live session. */
   session: (sessionId: string) => `translator:session:${sessionId}`,
+  /** Anonymous listener presence for one live session (operator head-count).
+   * Separate topic so presence traffic never disturbs the broadcast bus. */
+  presence: (sessionId: string) => `translator:presence:${sessionId}`,
 } as const;
 
 export const events = {

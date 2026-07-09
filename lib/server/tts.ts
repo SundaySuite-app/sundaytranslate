@@ -22,13 +22,15 @@ const MELO_LANGS: Record<string, string> = {
 };
 
 export function ttsSupports(locale: string): boolean {
-  return locale.split("-")[0] in MELO_LANGS;
+  // Object.hasOwn — a plain `in` also matches prototype keys ("constructor" …).
+  return Object.hasOwn(MELO_LANGS, locale.split("-")[0]);
 }
 
 /** Synthesize one line. Returns mp3 bytes, or null when unavailable (no AI
  * binding, or no voice for this language). */
 export async function synthesize(text: string, locale: string): Promise<Uint8Array | null> {
-  const lang = MELO_LANGS[locale.split("-")[0]];
+  const base = locale.split("-")[0];
+  const lang = Object.hasOwn(MELO_LANGS, base) ? MELO_LANGS[base] : undefined;
   if (!lang || !text.trim()) return null;
 
   let ai: AiBinding | undefined;
@@ -47,7 +49,8 @@ export async function synthesize(text: string, locale: string): Promise<Uint8Arr
     const bytes = new Uint8Array(bin.length);
     for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
     return bytes;
-  } catch {
+  } catch (err) {
+    console.warn("[tts] melotts failed", err);
     return null;
   }
 }

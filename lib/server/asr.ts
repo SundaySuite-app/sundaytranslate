@@ -31,7 +31,10 @@ export async function transcribe(bytes: Uint8Array): Promise<string | null> {
     });
     const text = res?.text;
     return typeof text === "string" ? text.trim() : null;
-  } catch {
+  } catch (err) {
+    // Log so rig-test can tell "Whisper rejected the container" apart from
+    // "binding missing" / quota — captions still just degrade off.
+    console.warn("[asr] whisper failed", err);
     return null;
   }
 }

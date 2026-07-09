@@ -13,9 +13,22 @@ replacement). Fully web-based, zero install, anonymous for listeners.
 rig-tested** (needs real Cloudflare Realtime + Workers AI + keys + phones).
 
 - **Phase 1** human interpreter + assistive listening — full, the reliable core.
+  **Hardened (July 2026)**: both ends self-heal — the listener auto-resubscribes
+  with backoff and follows publisher restarts (`useSubscriber.sync()` fed from
+  the live channel list); the publisher re-publishes with the mic kept hot,
+  watches `track.onended` (unplugged sound card), and flips its channel offline
+  via a `pagehide` keepalive beacon (no zombie "live" channels). Expired
+  sessions are rejected at read time (`verifySecret`/`getSession`); `/asr` is
+  rate-limited + body-capped; server-side fetches (broadcast, SFU proxy) are
+  timeout-bounded. Operator: presence head-count, channel delete, staff QRs
+  hidden behind a reveal. Tolk: mute, same-language collision warning, wake
+  lock. Listener: lock-screen play/pause + visibility resume.
 - **Phase 2** AI captions — source feeds 5s chunks → Whisper STT → Claude
-  translate → broadcast → listener subtitles (any language, incl. source for
-  HoH read-along). Degrades off cleanly with no AI binding / no key.
+  translate → broadcast → listener subtitles (source + channel targets, incl.
+  source for HoH read-along; history line + text-size toggle; the panel
+  auto-hides after 90s of caption silence). Degrades off cleanly with no AI
+  binding / no key — and repeated ASR failures surface a warning on the kilde
+  console instead of failing invisibly.
 - **Phase 3** AI synthetic voice — listener-side TTS of caption lines (no
   server WebRTC: the phone speaks). Experimental; MeloTTS language coverage is
   limited (en/es/fr/zh/ja/ko) — others get captions only.
