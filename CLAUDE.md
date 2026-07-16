@@ -33,8 +33,8 @@ rig-tested** (needs real Cloudflare Realtime + Workers AI + keys + phones).
   server WebRTC: the phone speaks). Experimental; MeloTTS language coverage is
   limited (en/es/fr/zh/ja/ko) — others get captions only.
 
-Gate: `npm run check` (tsc + eslint + vitest). Plan:
-`~/.claude/plans/kind-forging-origami.md`.
+Gate: `npm run check` (tsc + eslint + vitest). The implementation plan for
+this feature set has been completed and removed.
 
 ## Architecture (all Cloudflare + Supabase — no new vendors)
 
