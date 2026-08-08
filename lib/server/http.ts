@@ -13,9 +13,17 @@ export function fail(status: number, error: string, extra?: object): Response {
   return Response.json({ ok: false, error, ...(extra ?? {}) }, { status });
 }
 
-export async function readJson<T>(req: Request): Promise<T | null> {
+/** Parse a JSON body, bounded. Every legitimate body in this app is tiny (a
+ * caption line, channel coords, an enroll request), so an oversized payload is
+ * abuse — reject it before JSON.parse balloons Worker memory. Content-Length
+ * can be absent (chunked), so the decoded text length is checked too. */
+export async function readJson<T>(req: Request, maxBytes = 64_000): Promise<T | null> {
+  const declared = Number(req.headers.get("content-length") || 0);
+  if (declared > maxBytes) return null;
   try {
-    return (await req.json()) as T;
+    const text = await req.text();
+    if (text.length > maxBytes) return null;
+    return JSON.parse(text) as T;
   } catch {
     return null;
   }
