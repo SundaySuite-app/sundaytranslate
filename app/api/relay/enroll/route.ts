@@ -79,7 +79,9 @@ export async function POST(req: Request): Promise<Response> {
   });
 }
 
-/** Create or update an UN-proxied A record `name → ip` in the zone. */
+/** Create or update an UN-proxied A record `name → ip` in the zone. Bounded:
+ * a stalled Cloudflare API must never hang the Worker (the suite-wide
+ * timedFetch gotcha) — one deadline covers both round-trips incl. body reads. */
 async function upsertARecord(
   zoneId: string,
   token: string,
@@ -90,20 +92,30 @@ async function upsertARecord(
   const headers = { Authorization: `Bearer ${token}`, "Content-Type": "application/json" };
   const record = { type: "A", name, content: ip, ttl: 120, proxied: false };
 
-  const listRes = await fetch(`${base}?type=A&name=${encodeURIComponent(name)}`, { headers });
-  const list = (await listRes.json()) as { result?: Array<{ id: string }> };
-  const existingId = list.result?.[0]?.id;
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 10_000);
+  try {
+    const listRes = await fetch(`${base}?type=A&name=${encodeURIComponent(name)}`, {
+      headers,
+      signal: ctrl.signal,
+    });
+    const list = (await listRes.json()) as { result?: Array<{ id: string }> };
+    const existingId = list.result?.[0]?.id;
 
-  const res = existingId
-    ? await fetch(`${base}/${existingId}`, {
-        method: "PUT",
-        headers,
-        body: JSON.stringify(record),
-      })
-    : await fetch(base, { method: "POST", headers, body: JSON.stringify(record) });
+    const res = existingId
+      ? await fetch(`${base}/${existingId}`, {
+          method: "PUT",
+          headers,
+          body: JSON.stringify(record),
+          signal: ctrl.signal,
+        })
+      : await fetch(base, { method: "POST", headers, body: JSON.stringify(record), signal: ctrl.signal });
 
-  const j = (await res.json()) as { success?: boolean; errors?: unknown };
-  if (!res.ok || !j.success) {
-    throw new Error(`cloudflare dns ${res.status} ${JSON.stringify(j.errors ?? "")}`);
+    const j = (await res.json()) as { success?: boolean; errors?: unknown };
+    if (!res.ok || !j.success) {
+      throw new Error(`cloudflare dns ${res.status} ${JSON.stringify(j.errors ?? "")}`);
+    }
+  } finally {
+    clearTimeout(timer);
   }
 }

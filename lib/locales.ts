@@ -40,6 +40,19 @@ export function langName(code: string | null | undefined): string {
 export const UI_LOCALES = ["no", "nn", "en", "pl", "uk", "ar", "so"] as const;
 export type UiLocale = (typeof UI_LOCALES)[number];
 
+// Browsers never report the macro-code "no": Norwegian devices say "nb"/"nb-NO"
+// (bokmål). Without this alias the listener-page language guess missed our "no"
+// dictionary and Norwegians got an ENGLISH UI by default.
+const LOCALE_ALIAS: Record<string, string> = { nb: "no" };
+
+/** Collapse a BCP-47 tag ("nb-NO", "en-GB") to the base code this app knows,
+ * mapping aliases (nb → no). Does NOT guarantee membership in UI_LOCALES —
+ * `strings()` still falls back to English for unknown codes. */
+export function normalizeUiLocale(code: string | null | undefined): string {
+  const base = (code ?? "").trim().toLowerCase().split("-")[0];
+  return LOCALE_ALIAS[base] ?? base;
+}
+
 /** Right-to-left languages — flip the listener layout. */
 export const RTL = new Set(["ar", "fa"]);
 export function isRtl(code: string): boolean {

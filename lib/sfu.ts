@@ -246,18 +246,19 @@ function resolveResource(requestUrl: string, location: string): string {
  * must NOT require res.ok — only a network error / timeout / cert failure (which
  * throws) means not reachable, and the listener falls back to the cloud. */
 export async function relayReachable(base: string, timeoutMs = 1500): Promise<boolean> {
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), timeoutMs);
   try {
-    const ctrl = new AbortController();
-    const t = setTimeout(() => ctrl.abort(), timeoutMs);
     await fetch(`${stripSlash(base)}/`, {
       signal: ctrl.signal,
       mode: "cors",
       cache: "no-store",
     });
-    clearTimeout(t);
     return true;
   } catch {
     return false;
+  } finally {
+    clearTimeout(t);
   }
 }
 

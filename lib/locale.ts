@@ -2,7 +2,7 @@
 // so this chrome is translated. Keys fall back to English, then Norwegian.
 // Operator/source/interpreter pages stay Norwegian-first (staff are local).
 
-import type { UiLocale } from "@/lib/locales";
+import { normalizeUiLocale, type UiLocale } from "@/lib/locales";
 
 export interface Strings {
   choose: string;
@@ -174,10 +174,11 @@ const so: Strings = {
 
 const DICT: Record<UiLocale, Strings> = { en, no, nn, pl, uk, ar, so };
 
-/** Pick the best UI dictionary for a locale code (exact, then base, then en). */
+/** Pick the best UI dictionary for a locale code (exact, then normalized base
+ * incl. aliases like nb → no, then en). */
 export function strings(code: string): Strings {
   if (code in DICT) return DICT[code as UiLocale];
-  const base = code.split("-")[0];
+  const base = normalizeUiLocale(code);
   if (base in DICT) return DICT[base as UiLocale];
   return en;
 }

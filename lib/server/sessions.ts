@@ -126,8 +126,9 @@ export async function getOwnedSessionSecret(
 
 /** Owner-gated delete. Returns true if the row belonged to the host and was
  * removed; false if it didn't exist or is owned by someone else (so the route
- * can answer 404 without leaking other hosts' ids). Channels (and captions)
- * cascade via the FK / explicit cleanup. */
+ * can answer 404 without leaking other hosts' ids). Channels AND captions both
+ * cascade via their session FKs (20260613140000 / 20260613150000) — no manual
+ * cleanup needed here, unlike endSession where the session row survives. */
 export async function deleteSessionOwned(id: string, hostUserId: string): Promise<boolean> {
   const sb = createServiceClient();
   const { data, error } = await sb
@@ -137,12 +138,7 @@ export async function deleteSessionOwned(id: string, hostUserId: string): Promis
     .eq("host_user_id", hostUserId)
     .select("id");
   if (error) throw error;
-  const deleted = Array.isArray(data) && data.length > 0;
-  // captions has no FK cascade to sessions — clear it AFTER the owner-gated
-  // delete succeeded (clearing first would let any host wipe another session's
-  // captions by guessing its id). Best-effort; lazy GC also sweeps orphans.
-  if (deleted) await sb.from("captions").delete().eq("session_id", id);
-  return deleted;
+  return Array.isArray(data) && data.length > 0;
 }
 
 /** True when the row's 24h TTL has passed — expired sessions must behave as

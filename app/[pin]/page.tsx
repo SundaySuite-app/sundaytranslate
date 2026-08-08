@@ -10,7 +10,7 @@ import { useTtsVoice } from "@/lib/client/useTtsVoice";
 import { usePresenceTrack } from "@/lib/client/usePresence";
 import { useWakeLock } from "@/lib/client/hooks";
 import { channels as rtChannels } from "@/lib/realtime";
-import { LANGS, UI_LOCALES, isRtl, langName } from "@/lib/locales";
+import { LANGS, UI_LOCALES, isRtl, langName, normalizeUiLocale } from "@/lib/locales";
 import { strings } from "@/lib/locale";
 import type { ChannelView } from "@/lib/types";
 
@@ -36,7 +36,9 @@ export default function Listener() {
   const [ui, setUi] = useState("en");
   useEffect(() => {
     const saved = localStorage.getItem("st-ui");
-    const guess = saved || navigator.language?.split("-")[0] || "en";
+    // Normalize both paths: Norwegian browsers report "nb"/"nb-NO", which must
+    // land on our "no" dictionary (and older saves may hold a raw tag).
+    const guess = normalizeUiLocale(saved || navigator.language) || "en";
     // eslint-disable-next-line react-hooks/set-state-in-effect -- one-time client-only locale guess after hydration
     setUi(guess);
   }, []);

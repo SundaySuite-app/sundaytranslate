@@ -27,6 +27,9 @@ export default function Error({ reset }: { error: Error; reset: () => void }) {
           <button
             className="btn btn-block"
             onClick={() => {
+              // Deliberate HARD navigation: after a crash the client state is
+              // suspect; a router.push would keep the broken tree alive.
+              // eslint-disable-next-line @next/next/no-location-assign-relative-destination
               window.location.href = "/";
             }}
           >
