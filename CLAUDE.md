@@ -9,8 +9,27 @@ replacement). Fully web-based, zero install, anonymous for listeners.
 
 ## Status
 
-**All three phases implemented; type-checks, builds, lints clean. NOT yet
-rig-tested** (needs real Cloudflare Realtime + Workers AI + keys + phones).
+**All three phases implemented; type-checks, builds, lints clean. Live in prod
+since 2026-08-08 — but still NOT rig-tested** (the Realtime media path and iOS
+lock-screen playback need real phones on a real rig; see Rig-test below).
+
+- **Repo**: `SundaySuite-app/sundaytranslate` — moved into the org and made
+  **public** (2026-08-08). Working clone: `~/sunday-work/sundaytranslate`.
+- **Prod**: Worker version `cb19fce4`, deployed **2026-08-08** from that day's
+  main. Before then prod had been serving **June** code — the July round
+  (self-healing audio, liveness, AI cost guards, host-login) only went live
+  with this deploy. `/api/health` reports supabase ✅, translator_schema ✅,
+  cf_realtime ✅, **anthropic ❌** (no `ANTHROPIC_API_KEY` → captions stay
+  source-language only; human interpretation unaffected).
+- **Database**: **all 5 migrations verified applied** in prod (2026-08-08) —
+  not assumed: column probes distinguished 42501 from 42703 for
+  `local_relay_url` / `host_user_id` / `captions`, and the realtime-RLS policy
+  (`20260708120000_realtime_authz.sql`) was confirmed by actually subscribing
+  to a private channel and getting `SUBSCRIBED`.
+- **Local relay** (`POST /api/relay/enroll`) still answers 503
+  `relay_broker_unconfigured`: 4 of its 5 secrets are unset. Code + DB are
+  done; only the owner steps remain (wildcard cert + 4 Worker secrets) —
+  `sunday-suite/SundayTranslate-STATUS-RELAY-2026-08-08.md` §2.
 
 - **Phase 1** human interpreter + assistive listening — full, the reliable core.
   **Hardened (July 2026)**: both ends self-heal — the listener auto-resubscribes
@@ -90,9 +109,13 @@ listeners, never to the server logs. `verifySecret` gates every publish/end.
 
 ## Rig-test (Phase 1)
 
-Prereqs: `.env.local` from `.env.example` with the shared Supabase anon +
-service-role keys, a Cloudflare Realtime `CF_REALTIME_APP_ID`/`CF_REALTIME_APP_TOKEN`,
-and the migration applied + schema exposed.
+The full 8-step protocol (incl. relay fallback + the iOS lock test) is in
+`sunday-suite/SundayTranslate-STATUS-RELAY-2026-08-08.md` §3. Against **prod**
+no prereqs remain — it is deployed and the migrations are verified applied.
+To run it **locally** instead: `.env.local` from `.env.example` with the shared
+Supabase anon + service-role keys, a Cloudflare Realtime
+`CF_REALTIME_APP_ID`/`CF_REALTIME_APP_TOKEN`, and the migrations applied +
+schema exposed.
 
 1. `npm run dev`. On a laptop open `/` → **Start sesjon** → you land on `/o/<id>`.
 2. Open the **Lydkort/kilde** QR on a device wired to the mixer (or any laptop):
@@ -105,24 +128,47 @@ and the migration applied + schema exposed.
 
 ## Deploy
 
-Public config (`NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_BASE_URL`) lives in
-`wrangler.jsonc` `vars` — the SERVER reads these at runtime in the Worker (build-
-time `NEXT_PUBLIC_*` inlining only reaches the client bundle). The only secret
-**required for host-start** is `SUPABASE_SERVICE_ROLE_KEY`; without it
-`POST /api/sessions` returns 503 `service_unconfigured` and `/api/health` says so.
+Public config (`NEXT_PUBLIC_SUPABASE_URL` + the Sunday-Account issuer pair)
+lives in `wrangler.jsonc` `vars` — the SERVER reads these at runtime in the
+Worker (build-time `NEXT_PUBLIC_*` inlining only reaches the client bundle).
+The only secret **required for host-start** is `SUPABASE_SERVICE_ROLE_KEY`;
+without it `POST /api/sessions` returns 503 `service_unconfigured` and
+`/api/health` says so.
+
+⚠️ **Gotcha — the issuer placeholders.** `wrangler.jsonc` ships
+`REPLACE-issuer-ref` / `REPLACE-issuer-anon-key` for
+`NEXT_PUBLIC_SUNDAY_AUTH_URL` / `_ANON_KEY`. A plain deploy publishes those
+placeholders and `/host` login then silently can't work server-side (middleware
+reads the runtime vars). **A manual deploy must pass `--var` overrides** — the
+exact one-liner is in `sunday-suite/SundayTranslate-STATUS-RELAY-2026-08-08.md`
+§1, which also lays out the lasting fix (commit the real issuer values; they are
+public by design — the anon key is in every client bundle).
+
+⚠️ **GitHub Actions cannot deploy.** `.github/workflows/deploy.yml` has **never**
+succeeded: the repo is missing the `CLOUDFLARE_API_TOKEN`,
+`CLOUDFLARE_ACCOUNT_ID` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` Actions secrets.
+Manual wrangler deploy is the only working path until those are added.
 
 ```
 set -a && source .env.production.local && set +a
-npm run cf:build && npx opennextjs-cloudflare deploy
+npm run cf:build && npx opennextjs-cloudflare deploy   # + the --var overrides above
 npx wrangler secret put SUPABASE_SERVICE_ROLE_KEY   # REQUIRED — host-start
 npx wrangler secret put CF_REALTIME_APP_ID          # audio transport
 npx wrangler secret put CF_REALTIME_APP_TOKEN
-# then re-deploy (or `wrangler deploy`) so the Worker picks up the secrets.
+npx wrangler secret put TRANSLATE_ADMIN_EMAILS      # /host allowlist (fail-closed)
+npx wrangler secret put ANTHROPIC_API_KEY           # phase 2 caption translation
+# Secrets take effect immediately — no redeploy needed for a secret alone.
 # verify: curl -s https://translate.sundaysuite.app/api/health
 ```
 
+The local-relay broker needs five more secrets (`RELAY_ENROLL_TOKEN`,
+`RELAY_WILDCARD_CERT_PEM`, `RELAY_WILDCARD_KEY_PEM`, `CF_DNS_TOKEN`,
+`CF_ZONE_ID`) — documented in `.env.example`; with any of them missing the
+enrol route answers 503 and the app is simply cloud-only.
+
 `production-branch`/custom domain `translate.sundaysuite.app` is in
 `wrangler.jsonc`. Verify against the live domain like the other suite apps.
+Rollback: Cloudflare Dashboard → Workers → sundaytranslate → Deployments.
 
 ## Phase 2 / 3 — how they work (implemented)
 
