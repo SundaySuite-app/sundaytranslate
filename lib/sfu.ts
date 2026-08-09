@@ -297,9 +297,10 @@ export async function publishTrackWhip(
 
   const release = () => {
     pc.close();
-    // Free the mediamtx path immediately — without the DELETE the relay keeps
-    // the old publisher registered and refuses a re-publish until its own
-    // ICE timeout.
+    // Tell mediamtx to free the path (WHIP resource DELETE — the spec's clean
+    // teardown). mediamtx v1.9.3 actually accepts an immediate re-publish after
+    // a bare pc.close() too, so this is hygiene rather than a hard requirement;
+    // keep it, but don't assert the negative in a test (it won't reproduce).
     if (resource) void fetch(resource, { method: "DELETE" }).catch(() => {});
   };
   return {

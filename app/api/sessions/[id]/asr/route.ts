@@ -13,16 +13,12 @@
  * Degrades gracefully: no AI binding / no key → returns { transcript: null }
  * and the listener simply sees no captions. Never blocks the audio path.
  */
-import { ok, fail, rateLimit } from "@/lib/server/http";
+import { ok, fail, rateLimit, bearer } from "@/lib/server/http";
 import { broadcast } from "@/lib/server/broadcast";
 import { channels as rtChannels, events } from "@/lib/realtime";
 import { upsertCaption, verifySecret } from "@/lib/server/sessions";
 import { transcribe } from "@/lib/server/asr";
 import { translateLine } from "@/lib/server/translate";
-
-function bearer(req: Request): string | null {
-  return req.headers.get("authorization")?.replace(/^Bearer\s+/i, "") ?? null;
-}
 
 export async function POST(
   req: Request,

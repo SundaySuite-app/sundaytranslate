@@ -29,6 +29,13 @@ export async function readJson<T>(req: Request, maxBytes = 64_000): Promise<T | 
   }
 }
 
+/** Pull the write secret out of an `Authorization: Bearer <secret>` header.
+ * Every secret-gated route (publish/end/asr/relay/channels) uses this before
+ * `verifySecret`. Returns null when the header is absent or not a Bearer. */
+export function bearer(req: Request): string | null {
+  return req.headers.get("authorization")?.replace(/^Bearer\s+/i, "") ?? null;
+}
+
 export function clientIp(req: Request): string {
   const h = req.headers;
   return (

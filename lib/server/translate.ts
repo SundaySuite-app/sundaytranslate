@@ -49,7 +49,10 @@ export async function translateLine(
       },
       body: JSON.stringify({
         model: MODEL,
-        max_tokens: 400,
+        // One subtitle line — a couple of sentences at most. 120 is generous
+        // for that, and it caps the blast radius of a degenerate looping output
+        // so it can't burn the whole 8s timeout (and delay the next line).
+        max_tokens: 120,
         system,
         messages: [{ role: "user", content: text }],
       }),
