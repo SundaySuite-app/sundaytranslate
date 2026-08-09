@@ -5,14 +5,10 @@
  *   Body: { relayUrl: string | null, expiresAt?: string | null }
  *   Auth: session secret (Bearer). relayUrl must be https (mixed-content rule).
  */
-import { ok, fail, readJson } from "@/lib/server/http";
+import { ok, fail, readJson, bearer } from "@/lib/server/http";
 import { broadcast } from "@/lib/server/broadcast";
 import { channels as rtChannels, events } from "@/lib/realtime";
 import { setSessionRelay, verifySecret } from "@/lib/server/sessions";
-
-function bearer(req: Request): string | null {
-  return req.headers.get("authorization")?.replace(/^Bearer\s+/i, "") ?? null;
-}
 
 export async function POST(
   req: Request,
