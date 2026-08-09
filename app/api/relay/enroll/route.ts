@@ -40,8 +40,11 @@ function isPrivateIpv4(ip: string): boolean {
   );
 }
 
-/** Single DNS label (the wildcard cert only covers one level). */
-const isSlug = (s: string) => /^[a-z0-9][a-z0-9-]{1,40}$/.test(s);
+/** Single DNS label (the wildcard cert only covers one level). Both ends must
+ * be alphanumeric: a trailing hyphen (`menighet-`) is not a legal DNS label,
+ * and the old pattern accepted it — the record would be created and then fail
+ * to resolve. Length 2–41, hyphens allowed only in the middle. */
+const isSlug = (s: string) => /^[a-z0-9][a-z0-9-]{0,39}[a-z0-9]$/.test(s);
 
 export async function POST(req: Request): Promise<Response> {
   if (!rateLimit(`enroll:${clientIp(req)}`, 30, 60_000)) return fail(429, "rate_limited");
