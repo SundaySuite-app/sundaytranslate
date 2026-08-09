@@ -6,10 +6,11 @@ rig-test). The code for all three phases is complete and `npm run check` is gree
 
 ## ✅ Headless — done / verifiable without hardware
 
-- [x] `npm run check` green (tsc + eslint + vitest). 33 unit tests cover the
-      pure helpers (`lib/codes`, `lib/locales`) and the server seams
+- [x] `npm run check` green (tsc + eslint + vitest). 143 unit tests cover the
+      pure helpers (`lib/codes`, `lib/locales`), the server seams
       (`lib/server/translate`, `asr`, `tts`) including every degrade-to-null
-      fallback path.
+      fallback path, and the route guards: the SFU proxy allowlist, the
+      relay-enrol validators and the session-secret 401 gate on every write route.
 - [x] CI gate: `.github/workflows/ci.yml` runs the same gate on every push/PR.
 - [x] Phase-1/2/3 code complete; builds clean (`npm run build`).
 
@@ -22,7 +23,7 @@ rig-test). The code for all three phases is complete and `npm run check` is gree
    Exposed schemas → add **`translator`** → Save.
 3. **Secrets / `.env.production.local`** (see `.env.example`):
    - `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`,
-     `SUPABASE_SERVICE_ROLE_KEY`, `NEXT_PUBLIC_BASE_URL`
+     `SUPABASE_SERVICE_ROLE_KEY`
    - `CF_REALTIME_APP_ID`, `CF_REALTIME_APP_TOKEN` (Cloudflare Realtime app)
    - `ANTHROPIC_API_KEY` (Phase 2 captions — optional; no key → captions degrade,
      human interpretation unaffected)
