@@ -18,9 +18,15 @@ import { getSession } from "@/lib/server/sessions";
 
 const SFU_BASE = "https://rtc.live.cloudflare.com/v1/apps";
 
+// The SFU session id. Dots/underscores/hyphens occur in Cloudflare's ids, but a
+// segment made ONLY of punctuation is never an id — the leading lookahead
+// demands at least one alphanumeric so `..`, `.` and `...` can't stand in for
+// one. Length-bounded so the class can't be walked far.
+const SFU_ID = "(?=[A-Za-z0-9._-]*[A-Za-z0-9])[A-Za-z0-9._-]{1,128}";
+
 const ALLOW: Record<string, RegExp> = {
-  POST: /^sessions\/new$|^sessions\/[A-Za-z0-9._-]+\/tracks\/new$/,
-  PUT: /^sessions\/[A-Za-z0-9._-]+\/renegotiate$/,
+  POST: new RegExp(`^sessions/new$|^sessions/${SFU_ID}/tracks/new$`),
+  PUT: new RegExp(`^sessions/${SFU_ID}/renegotiate$`),
 };
 
 async function proxy(req: Request, path: string[]): Promise<Response> {
@@ -40,6 +46,13 @@ async function proxy(req: Request, path: string[]): Promise<Response> {
     return fail(429, "rate_limited");
   const session = await getSession(sessionId);
   if (!session || session.status !== "live") return fail(401, "session_required");
+
+  // Defence in depth against path traversal: a `.`/`..` segment must never
+  // reach the upstream URL. The id class allows dots, so `sessions/../tracks/new`
+  // would otherwise satisfy the allowlist and let WHATWG URL normalisation
+  // rewrite the path we thought we had approved (…/apps/<id>/tracks/new).
+  // Rejected exactly like any other unlisted path — same 404, no new error code.
+  if (path.some((seg) => seg === "." || seg === "..")) return fail(404, "not_found");
 
   const sub = path.join("/");
   const allow = ALLOW[req.method];
