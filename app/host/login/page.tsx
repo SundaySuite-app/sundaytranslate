@@ -50,7 +50,7 @@ export default function HostLogin() {
       <div className="wrap" style={{ maxWidth: 460 }}>
         <div className="stack" style={{ gap: 24 }}>
           <header className="stack" style={{ gap: 8, textAlign: "center" }}>
-            <div className="kicker">Sunday Suite</div>
+            <div className="kicker">SundaySuite</div>
             <h1 style={{ fontSize: "clamp(28px,6vw,40px)", margin: 0 }}>
               Sunday<span style={{ color: "var(--accent)" }}>Translate</span>
             </h1>

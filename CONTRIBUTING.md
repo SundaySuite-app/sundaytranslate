@@ -1,6 +1,6 @@
 # Contributing to SundayTranslate
 
-SundayTranslate streams live interpretation and assistive listening to any phone in the pew. It is part of [Sunday Suite](https://sundaysuite.app) — a family of
+SundayTranslate streams live interpretation and assistive listening to any phone in the pew. It is part of [SundaySuite](https://sundaysuite.app) — a family of
 open-source tools for churches and classrooms, built in Norway. It is free, actively
 developed, and honestly unfinished. Contributions of every size are welcome, and you
 do not need to be a developer to make one.

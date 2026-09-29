@@ -50,7 +50,7 @@ export default function Landing() {
       <div className="wrap" style={{ maxWidth: 560 }}>
         <div className="stack" style={{ gap: 28 }}>
           <header className="stack" style={{ gap: 8, textAlign: "center" }}>
-            <div className="kicker">Sunday Suite</div>
+            <div className="kicker">SundaySuite</div>
             <h1 style={{ fontSize: "clamp(30px,8.5vw,52px)", overflowWrap: "break-word" }}>
               Sunday<wbr />
               <span style={{ color: "var(--accent)" }}>Translate</span>
